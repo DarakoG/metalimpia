@@ -26,13 +26,17 @@
  *   { op: 'write', id, buffer, fileName, tagsToRemove, removeAll }
  *       Writes a cleaned copy of `buffer` into
  *       `/<tmpFile>` by running either
- *         /exiftool -All= -o <tmpPath> <inputPath>
+ *         /exiftool -unsafe -All= -o <tmpPath> <inputPath>
  *       (when removeAll is true) or
  *         /exiftool -Tag1= -Tag2= ... -o <tmpPath> <inputPath>
  *       (for selective removal — empty tags set the tag to the
  *       empty string per ExifTool semantics, equivalent to deleting
- *       it from most formats). The cleaned bytes are read back
- *       from the virtual FS and posted with
+ *       it from most formats). The `-unsafe` flag for removeAll
+ *       unlocks the small set of tags ExifTool normally preserves
+ *       as "unsafe to remove"; per Design Spec §2, MetaLimpia's
+ *       explicit privacy stance is that the user wants the file
+ *       aggressively clean. The cleaned bytes are read back from
+ *       the virtual FS and posted with
  *       { ok: true, op: 'write', id, cleaned }. }
  *       On failure the `error` field is 'write_failed' or 'crashed'.
  *
@@ -414,16 +418,23 @@ async function handleWrite(msg) {
     // its value to an empty string, which ExifTool treats as
     // a clear across all writable formats.
     let tagsObj;
+    const writeOpts = {
+      fetch: customFetchForZeroperl,
+    };
     if (msg.removeAll) {
-      // `-All=` removes every writable tag, including ones
-      // ExifTool considers "unsafe" to remove. MetaLimpia's
+      // `-All=` removes every writable tag. We also pass
+      // `-unsafe` to unlock the small set of tags ExifTool
+      // normally preserves as "unsafe to remove" — MetaLimpia's
       // explicit privacy stance (Design Spec §2) is that the
-      // user wants the file clean; the conservative ExifTool
-      // default of preserving "unsafe" tags would defeat the
-      // tool's purpose. The vendored wrapper maps `{All:''}`
-      // to the `-All=` CLI flag, which is the canonical way
-      // to clear all writable metadata in ExifTool.
+      // user wants the file aggressively clean, and the
+      // conservative ExifTool default would defeat the tool's
+      // purpose. The vendored wrapper maps `{All:''}` to the
+      // `-All=` CLI flag, which is the canonical way to clear
+      // all writable metadata in ExifTool. `args: ['-unsafe']`
+      // is prepended so the effective command becomes
+      // `/exiftool -unsafe -All= -o <tmp> <input>`.
       tagsObj = { All: '' };
+      writeOpts.args = ['-unsafe'];
     } else {
       tagsObj = {};
       for (const tag of msg.tagsToRemove) {
@@ -436,9 +447,7 @@ async function handleWrite(msg) {
       data: new Uint8Array(msg.buffer),
     };
 
-    const result = await writeMetadata(fileLike, tagsObj, {
-      fetch: customFetchForZeroperl,
-    });
+    const result = await writeMetadata(fileLike, tagsObj, writeOpts);
 
     if (!result.success) {
       const detail = String(result.error || 'unknown');
