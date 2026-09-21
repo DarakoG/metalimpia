@@ -59,6 +59,7 @@ import { wireUploader } from './ui/uploader.js';
 import { renderErrorView } from './ui/errorView.js';
 import { renderAnalyzingView } from './ui/analyzingView.js';
 import { renderResults } from './ui/metadataView.js';
+import { renderPdfScopeView } from './ui/pdfScopeView.js';
 import { renderDoneView } from './ui/doneView.js';
 import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
@@ -87,6 +88,11 @@ import { initVerifier } from './ui/privacyVerifier.js';
  * @property {File} file
  * @property {import('./metadataParser.js').FileMetadata} metadata
  *
+ * @typedef {Object} AppStatePdfScope
+ * @property {'pdfScope'} view
+ * @property {File} file
+ * @property {import('./metadataParser.js').FileMetadata} metadata
+ *
  * @typedef {Object} AppStateProcessing
  * @property {'processing'} view
  * @property {File} file
@@ -103,7 +109,7 @@ import { initVerifier } from './ui/privacyVerifier.js';
  * @property {string} errorKey
  * @property {Record<string, unknown>=} context
  *
- * @typedef {AppStateLanding | AppStateAnalyzing | AppStateResults | AppStateProcessing | AppStateDone | AppStateError} AppState
+ * @typedef {AppStateLanding | AppStateAnalyzing | AppStateResults | AppStatePdfScope | AppStateProcessing | AppStateDone | AppStateError} AppState
  */
 
 /** @type {AppState} */
@@ -289,6 +295,21 @@ function render() {
     return;
   }
 
+  // PDF-only intermediate view. Shown BETWEEN results and
+  // processing so the user reads the honest cleanup scope
+  // (what WILL be removed, what will NOT) before triggering
+  // pdf-lib. Entered from handleRemove when the dropped
+  // filename ends in .pdf; exited via the on-back button
+  // (→ results) or the on-confirm button (→ processing →
+  // handlePdfScopeConfirm).
+  if (state.view === 'pdfScope') {
+    renderPdfScopeView(viewContainer, state.file, {
+      onBack: () => setState({ view: 'results', file: state.file, metadata: state.metadata }),
+      onConfirm: handlePdfScopeConfirm,
+    });
+    return;
+  }
+
   if (state.view === 'done') {
     // downloadName is computed on render from file.name per
     // Data Model §5.1 (CleanedFile.downloadName). The state
@@ -356,6 +377,9 @@ function buildErrorContext(errorKey, file) {
  *   - 'corrupted'        → exiftool could not parse the file
  *   - 'unsupported'      → exiftool refused the file type
  *   - 'write_failed'     → exiftool refused to write the cleaned copy
+ *   - 'pdf_encrypted'    → exiftool refused because the PDF is
+ *                          password-protected (Worker detection —
+ *                          see js/workers/pdfEncryptionDetect.js)
  *   - 'crashed'          → unhandled throw inside the Worker
  *                          (write/read runtime issue)
  *   - anything else      → treat as generic worker_crashed
@@ -365,8 +389,25 @@ function mapLoaderErrorToI18nKey(code) {
   if (code === 'corrupted') return 'corrupted';
   if (code === 'unsupported') return 'unsupported';
   if (code === 'write_failed') return 'write_failed';
+  if (code === 'pdf_encrypted') return 'pdf_encrypted';
   if (code === 'crashed') return 'crashed';
   return 'worker_crashed';
+}
+
+/**
+ * Format-key for the filename extension gate. Used by the
+ * PDF branch in handleRemove and by the privacy-guard test
+ * fixtures; keeping the case-insensitive comparison in one
+ * place avoids the JPG/PDF mix-ups Phase 8 used to hit.
+ *
+ * @param {string} fileName
+ * @returns {boolean}
+ */
+function isPdfFileName(fileName) {
+  return (
+    typeof fileName === 'string' &&
+    fileName.toLowerCase().endsWith('.pdf')
+  );
 }
 
 /**
@@ -378,9 +419,14 @@ function mapLoaderErrorToI18nKey(code) {
  * Flow:
  *   1. Snapshot the file reference so we can render the
  *      processing card if the user clicks mid-transition.
- *   2. Switch to the 'processing' view so the user sees the
- *      Phase 5 "Limpiando archivo..." spinner card.
- *   3. Call writeMetadata with the live tagsToRemove /
+ *   2. PDF branch: route to the pdf-scope disclosure view
+ *      BEFORE running the scrub, so the user reads the
+ *      honest cleanup scope (what pdf-lib WILL remove,
+ *      what it will NOT — encrypted PDFs, form appearances,
+ *      signing, page-level annotation authors, visible
+ *      personal data) before clicking confirm.
+ *   3. Non-PDF branch: switch to the 'processing' view and
+ *      call writeMetadata with the live tagsToRemove /
  *      removeAll pair. The Worker runs exiftool with
  *      `-unsafe -All= -o <tmp> <in>` (removeAll) or
  *      `-Tag= -o <tmp> <in>` (selective) per Phase 5.1.
@@ -408,6 +454,25 @@ async function handleRemove(payload) {
       view: 'error',
       errorKey: 'worker_crashed',
     });
+    return;
+  }
+
+  // ---- PDF branch -----------------------------------------
+  // PDFs do NOT go through the ExifTool Worker write path
+  // because the vendored zeroperl runtime is broken on the
+  // PDF write op (Phase-N investigation of the mro defect
+  // is tracked separately). Instead we route the user
+  // through a dedicated scope disclosure view
+  // (js/ui/pdfScopeView.js) and then scrub with pdf-lib
+  // (js/pdfScrubber.js) — see handlePdfScopeConfirm below.
+  //
+  // We snapshot the metadata reference now because the
+  // pdfScope state carries it forward (handlePdfScopeConfirm
+  // reads totalCount off it for the done-view summary).
+  if (isPdfFileName(file.name)) {
+    const metadata =
+      state.view === 'results' && state.metadata ? state.metadata : null;
+    setState({ view: 'pdfScope', file, metadata });
     return;
   }
 
@@ -478,6 +543,87 @@ async function handleRemove(payload) {
 function handleCancelProcessing() {
   terminateWorker();
   setState({ view: 'landing' });
+}
+
+/**
+ * PDF path — confirm the cleanup scope disclosure.
+ *
+ * Triggered by the "Limpiar y descargar" CTA on the
+ * pdf-scope view (js/ui/pdfScopeView.js). Dynamic-imports
+ * js/pdfScrubber.js so the pdf-lib chunk is only fetched
+ * when the user actually confirms — non-PDF drops never
+ * pay the bundle cost (Design Spec acceptance: "Bundle
+ * impact ~300 KB tree-shaken ESM. Acceptable for the PDF
+ * path only. Vite import must be dynamic so non-PDF
+ * loads don't pay the cost").
+ *
+ * Flow:
+ *   1. Snapshot the file + buffer + metadata count from
+ *      the pdf-scope state BEFORE transitioning to
+ *      'processing' (same regression-guard as handleRemove
+ *      — the 'processing' shape does not carry `metadata`).
+ *   2. Switch to 'processing' so the user sees the same
+ *      spinner as the ExifTool Worker path.
+ *   3. Dynamic-import the scrubber module. The first
+ *      import pulls in the pdf-lib chunk; subsequent calls
+ *      (in the same session) reuse the cached module.
+ *   4. Call scrubPdf(pendingBuffer). The module handles:
+ *        - updateMetadata:false (no pdf-lib fingerprint)
+ *        - ignoreEncryption:false (fail closed on
+ *          password-protected PDFs → EncryptedPDFError →
+ *          Error { code: 'pdf_encrypted' })
+ *        - catalog.delete + context.delete for /Metadata,
+ *          /PieceInfo, /StructTreeRoot, /AA, /MarkInfo,
+ *          /Names, and the Info dict.
+ *   5. On success → 'done' view. removedCount is the
+ *      totalCount we extracted from ExifTool — the closest
+ *      honest proxy for "metadata we attempted to remove"
+ *      (the user-facing summary, not the exact byte diff).
+ *   6. On failure → 'error' view routed through
+ *      mapLoaderErrorToI18nKey. pdf_encrypted is already
+ *      in the table (errors.pdfEncrypted exists in
+ *      locales/es.json + the errorView mapping).
+ *
+ * Errors that aren't pdf_encrypted or corrupted collapse
+ * to write_failed (a pdf-lib save throw is, from the
+ * user's perspective, "we could not produce a cleaned
+ * file"). The detail is logged for debuggability.
+ */
+async function handlePdfScopeConfirm() {
+  // Snapshot from pdfScope state BEFORE transitioning.
+  const file = state.view === 'pdfScope' ? state.file : null;
+  const metadata =
+    state.view === 'pdfScope' && state.metadata ? state.metadata : null;
+  if (!file || !pendingBuffer) {
+    setState({ view: 'error', errorKey: 'worker_crashed' });
+    return;
+  }
+  const totalCount = metadata ? metadata.totalCount : 0;
+
+  setState({ view: 'processing', file });
+
+  try {
+    // Dynamic import keeps pdf-lib out of the first-paint
+    // bundle. Vite emits a separate chunk for pdfScrubber
+    // + its pdf-lib dependency graph; that chunk only
+    // downloads when a user actually confirms a PDF scrub.
+    const mod = await import('./pdfScrubber.js');
+    const cleanedBuffer = await mod.scrubPdf(pendingBuffer);
+
+    setState({
+      view: 'done',
+      file,
+      cleanedBuffer,
+      removedCount: totalCount,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('MetaLimpia: pdf scrub failed', err);
+    setState({
+      view: 'error',
+      errorKey: mapLoaderErrorToI18nKey(err && err.code),
+    });
+  }
 }
 
 /**

@@ -38,7 +38,10 @@
  *       aggressively clean. The cleaned bytes are read back from
  *       the virtual FS and posted with
  *       { ok: true, op: 'write', id, cleaned }. }
- *       On failure the `error` field is 'write_failed' or 'crashed'.
+ *       On failure the `error` field is 'write_failed',
+ *       'pdf_encrypted' (when the file is a PDF and ExifTool's
+ *       stderr smells like encryption — see
+ *       pdfEncryptionDetect.js), or 'crashed'.
  *
  * Validation: every inbound message is shape-checked before
  * being acted on (see `validateMessage`). Malformed messages
@@ -51,6 +54,7 @@
  */
 
 import { parseMetadata, writeMetadata } from '../vendor/exiftool/index.js';
+import { looksLikeEncryptedPdf } from './pdfEncryptionDetect.js';
 
 // Workaround for a vendored-runtime detection bug. The minified
 // `isBrowser()` helper inside js/vendor/zeroperl compares
@@ -473,9 +477,19 @@ async function handleWrite(msg) {
 
     if (!result.success) {
       const detail = String(result.error || 'unknown');
-      const errorCode = detail.toLowerCase().includes('crash')
+      const lower = detail.toLowerCase();
+      // Specialised write failures get a more helpful error code.
+      // Order matters: 'crashed' wins over 'pdf_encrypted' because
+      // a runtime crash in the vendored Perl runtime is the worse
+      // failure and the user can't recover by re-exporting the
+      // file. Encrypted-PDF detection is gated on the .pdf
+      // extension (see looksLikeEncryptedPdf) so non-PDF formats
+      // are never misclassified here.
+      const errorCode = lower.includes('crash')
         ? 'crashed'
-        : 'write_failed';
+        : looksLikeEncryptedPdf(detail, msg.fileName)
+          ? 'pdf_encrypted'
+          : 'write_failed';
       post({
         ok: false,
         op: 'write',

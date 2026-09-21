@@ -133,6 +133,17 @@ function truncate(value, limit) {
 export function renderResults(container, file, metadata, callbacks = {}) {
   if (!container) return;
 
+  // PDFs run through a dedicated flow in main.js (results →
+  // pdf-scope view → pdf-lib scrub), so the per-tag selection UI
+  // is meaningless and the "Borrar seleccionados" button would
+  // dead-end. Hide both. Detection is filename-based so this
+  // view stays the single source of truth for the format-aware
+  // action bar.
+  const isPdf =
+    file &&
+    typeof file.name === 'string' &&
+    file.name.toLowerCase().endsWith('.pdf');
+
   const onSelectionChange =
     typeof callbacks.onSelectionChange === 'function'
       ? callbacks.onSelectionChange
@@ -172,12 +183,12 @@ export function renderResults(container, file, metadata, callbacks = {}) {
 
   // Build the action bar first so we can hand its
   // disabled-setter down to the per-tag handlers.
-  const actionsState = buildActions({ onBack, onRemove, model });
+  const actionsState = buildActions({ onBack, onRemove, model, isPdf });
 
   if (model.totalCount === 0 || model.groups.length === 0) {
     card.appendChild(buildEmptyState());
   } else {
-    card.appendChild(buildGroupList(model, fireSelectionChange));
+    card.appendChild(buildGroupList(model, fireSelectionChange, isPdf));
   }
 
   card.appendChild(actionsState.element);
@@ -282,13 +293,18 @@ function buildEmptyState() {
  * Build the list of groups. Each group is collapsible,
  * has a per-group select-all toggle, a sensitive badge
  * when applicable, and renders its tag rows.
+ *
+ * When `isPdf` is true the per-group select-all toggle and
+ * the per-tag checkboxes are omitted (PDFs run through the
+ * dedicated pdf-scope flow in main.js where selective removal
+ * does not apply).
  */
-function buildGroupList(model, onSelectionChange) {
+function buildGroupList(model, onSelectionChange, isPdf) {
   const list = document.createElement('div');
   list.className = 'metadata-list';
 
   for (const group of model.groups) {
-    list.appendChild(buildGroup(group, model, onSelectionChange));
+    list.appendChild(buildGroup(group, model, onSelectionChange, isPdf));
   }
   return list;
 }
@@ -297,7 +313,7 @@ function buildGroupList(model, onSelectionChange) {
  * Build one group's section: header (label + badge +
  * toggle), collapsible body (tag rows).
  */
-function buildGroup(group, model, onSelectionChange) {
+function buildGroup(group, model, onSelectionChange, isPdf) {
   const section = document.createElement('section');
   section.className = 'metadata-group';
   if (group.sensitive) section.classList.add('metadata-group--sensitive');
@@ -343,32 +359,40 @@ function buildGroup(group, model, onSelectionChange) {
   // is a single button whose label flips based on the
   // group's current state — first click deselects all,
   // next selects all, and so on.
-  const selectAllBtn = document.createElement('button');
-  selectAllBtn.type = 'button';
-  selectAllBtn.className = 'metadata-group-toggle-all btn btn-secondary';
-  selectAllBtn.textContent = computeToggleLabel(group);
-  selectAllBtn.addEventListener('click', () => {
-    const allSelected = group.tags.every((t) => t.selected);
-    const nextSelected = !allSelected;
-    for (const tag of group.tags) {
-      tag.selected = nextSelected;
-    }
-    // Re-sync UI: every tag row's checkbox + the toggle's
-    // own label.
-    section
-      .querySelectorAll('.metadata-tag-checkbox')
-      .forEach((cb) => {
-        cb.checked = nextSelected;
-      });
-    section
-      .querySelectorAll('.metadata-tag-row')
-      .forEach((row) => {
-        row.classList.toggle('metadata-tag-row--deselected', !nextSelected);
-      });
+  //
+  // Suppressed for PDFs: the metadata table is read-only
+  // for PDFs (selective removal does not apply — see
+  // js/main.js handleRemove's .pdf branch and the dedicated
+  // pdf-scope view in js/ui/pdfScopeView.js).
+  let selectAllBtn = null;
+  if (!isPdf) {
+    selectAllBtn = document.createElement('button');
+    selectAllBtn.type = 'button';
+    selectAllBtn.className = 'metadata-group-toggle-all btn btn-secondary';
     selectAllBtn.textContent = computeToggleLabel(group);
-    onSelectionChange();
-  });
-  header.appendChild(selectAllBtn);
+    selectAllBtn.addEventListener('click', () => {
+      const allSelected = group.tags.every((t) => t.selected);
+      const nextSelected = !allSelected;
+      for (const tag of group.tags) {
+        tag.selected = nextSelected;
+      }
+      // Re-sync UI: every tag row's checkbox + the toggle's
+      // own label.
+      section
+        .querySelectorAll('.metadata-tag-checkbox')
+        .forEach((cb) => {
+          cb.checked = nextSelected;
+        });
+      section
+        .querySelectorAll('.metadata-tag-row')
+        .forEach((row) => {
+          row.classList.toggle('metadata-tag-row--deselected', !nextSelected);
+        });
+      selectAllBtn.textContent = computeToggleLabel(group);
+      onSelectionChange();
+    });
+    header.appendChild(selectAllBtn);
+  }
 
   // Collapsible body — uses CSS grid-row trick for smooth
   // height animation; the global prefers-reduced-motion
@@ -384,7 +408,7 @@ function buildGroup(group, model, onSelectionChange) {
   body.appendChild(bodyInner);
 
   for (const tag of group.tags) {
-    bodyInner.appendChild(buildTagRow(tag, model, onSelectionChange));
+    bodyInner.appendChild(buildTagRow(tag, model, onSelectionChange, isPdf));
   }
 
   headerButton.addEventListener('click', () => {
@@ -445,44 +469,55 @@ function collectSelectedIds(model) {
  * The row is wrapped in a <label> so the entire row is
  * clickable, and the checkbox state stays in sync with
  * `tag.selected`.
+ *
+ * When `isPdf` is true the checkbox is omitted and the row
+ * is wrapped in a plain <div> instead of <label> (no
+ * associated control). The tag name + value are still
+ * rendered so the user can see what ExifTool extracted.
  */
-function buildTagRow(tag, model, onSelectionChange) {
+function buildTagRow(tag, model, onSelectionChange, isPdf) {
   const li = document.createElement('li');
   li.className = 'metadata-tag-row';
-  if (!tag.selected) li.classList.add('metadata-tag-row--deselected');
+  if (!isPdf && !tag.selected) li.classList.add('metadata-tag-row--deselected');
 
-  const labelEl = document.createElement('label');
+  // For PDFs the wrapping element is a <div> — there is no
+  // checkbox to act as the label's control, so a <label>
+  // would be meaningless. For all other formats the existing
+  // <label> wrapper is preserved (large click target).
+  const labelEl = document.createElement(isPdf ? 'div' : 'label');
   labelEl.className = 'metadata-tag-label';
 
-  const checkbox = document.createElement('input');
-  checkbox.type = 'checkbox';
-  checkbox.className = 'metadata-tag-checkbox';
-  checkbox.checked = Boolean(tag.selected);
-  checkbox.setAttribute(
-    'aria-label',
-    `${tag.id}: ${tag.value}`
-  );
-  checkbox.addEventListener('change', () => {
-    tag.selected = checkbox.checked;
-    li.classList.toggle('metadata-tag-row--deselected', !tag.selected);
-    // Sync the group's select-all toggle label (it may
-    // have flipped from "all selected" to "not all").
-    const section = li.closest('.metadata-group');
-    if (section) {
-      const toggleAll = section.querySelector('.metadata-group-toggle-all');
-      if (toggleAll) {
-        const cbs = section.querySelectorAll('.metadata-tag-checkbox');
-        const allChecked = Array.from(cbs).every((cb) => cb.checked);
-        toggleAll.textContent = t(
-          allChecked
-            ? 'results.toggle.deselectAll'
-            : 'results.toggle.selectAll'
-        );
+  if (!isPdf) {
+    const checkbox = document.createElement('input');
+    checkbox.type = 'checkbox';
+    checkbox.className = 'metadata-tag-checkbox';
+    checkbox.checked = Boolean(tag.selected);
+    checkbox.setAttribute(
+      'aria-label',
+      `${tag.id}: ${tag.value}`
+    );
+    checkbox.addEventListener('change', () => {
+      tag.selected = checkbox.checked;
+      li.classList.toggle('metadata-tag-row--deselected', !tag.selected);
+      // Sync the group's select-all toggle label (it may
+      // have flipped from "all selected" to "not all").
+      const section = li.closest('.metadata-group');
+      if (section) {
+        const toggleAll = section.querySelector('.metadata-group-toggle-all');
+        if (toggleAll) {
+          const cbs = section.querySelectorAll('.metadata-tag-checkbox');
+          const allChecked = Array.from(cbs).every((cb) => cb.checked);
+          toggleAll.textContent = t(
+            allChecked
+              ? 'results.toggle.deselectAll'
+              : 'results.toggle.selectAll'
+          );
+        }
       }
-    }
-    onSelectionChange();
-  });
-  labelEl.appendChild(checkbox);
+      onSelectionChange();
+    });
+    labelEl.appendChild(checkbox);
+  }
 
   const name = document.createElement('span');
   name.className = 'metadata-tag-name text-mono';
@@ -515,8 +550,15 @@ function buildTagRow(tag, model, onSelectionChange) {
  * without re-walking the DOM (the previous MutationObserver
  * approach was too clever and missed updates when buttons
  * were added to the DOM after the observer was created).
+ *
+ * When `isPdf` is true the "Borrar seleccionados" button is
+ * suppressed (selective removal does not apply for PDFs —
+ * the orchestrator routes the "Borrar todo" click into the
+ * pdf-scope view). The `syncRemoveSelected` helper is still
+ * returned as a no-op so the caller's lifecycle is
+ * unchanged.
  */
-function buildActions({ onBack, onRemove, model }) {
+function buildActions({ onBack, onRemove, model, isPdf }) {
   const bar = document.createElement('div');
   bar.className = 'results-actions';
 
@@ -536,18 +578,24 @@ function buildActions({ onBack, onRemove, model }) {
   });
   bar.appendChild(removeAllBtn);
 
-  const removeSelectedBtn = document.createElement('button');
-  removeSelectedBtn.type = 'button';
-  removeSelectedBtn.className = 'btn';
-  removeSelectedBtn.textContent = t('results.actions.removeSelected');
-  removeSelectedBtn.addEventListener('click', () => {
-    if (onRemove) onRemove({
-      removeAll: false,
-      fileId: model.fileId,
-      tagsToRemove: collectSelectedIds(model),
+  // Selective removal is skipped for PDFs — the pdf-scope
+  // disclosure (js/ui/pdfScopeView.js) is the only entry
+  // point into the PDF scrub path, and it always scrubs.
+  let removeSelectedBtn = null;
+  if (!isPdf) {
+    removeSelectedBtn = document.createElement('button');
+    removeSelectedBtn.type = 'button';
+    removeSelectedBtn.className = 'btn';
+    removeSelectedBtn.textContent = t('results.actions.removeSelected');
+    removeSelectedBtn.addEventListener('click', () => {
+      if (onRemove) onRemove({
+        removeAll: false,
+        fileId: model.fileId,
+        tagsToRemove: collectSelectedIds(model),
+      });
     });
-  });
-  bar.appendChild(removeSelectedBtn);
+    bar.appendChild(removeSelectedBtn);
+  }
 
   const backBtn = document.createElement('button');
   backBtn.type = 'button';
@@ -557,6 +605,7 @@ function buildActions({ onBack, onRemove, model }) {
   bar.appendChild(backBtn);
 
   function syncRemoveSelected() {
+    if (!removeSelectedBtn) return;
     const anySelected = model.groups.some((g) =>
       g.tags.some((t) => t.selected)
     );
