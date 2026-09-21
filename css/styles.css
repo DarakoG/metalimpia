@@ -308,6 +308,16 @@ a {
   background-color: var(--color-surface-alt);
 }
 
+/* Phase 2 — drag-over affordance. Mirrors the hover/focus
+   treatment so the highlight feels consistent across pointer
+   and keyboard paths. Tokens are reused from the design
+   system; no new colours are introduced. */
+.dropzone.is-dragging {
+  border-color: var(--color-primary);
+  background-color: var(--color-surface-alt);
+  border-style: solid;
+}
+
 .dropzone-icon {
   display: inline-flex;
   align-items: center;
