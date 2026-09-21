@@ -10,9 +10,10 @@
  * decision, not a locale lookup decision.
  *
  * The error codes accepted here are a superset of what the
- * Phase 2 validator returns. Phase 6 wires the remaining
- * codes (corrupted, wasm_load_failed, worker_crashed,
- * browser_too_old) from the full AppState.error path
+ * Phase 2 validator returns. Phase 5 adds `writeFailed`
+ * for ExifTool write failures; the remaining codes
+ * (corrupted, wasm_load_failed, worker_crashed,
+ * browser_too_old) cover the full AppState.error path
  * defined in Data Model section 3.1.
  */
 
@@ -30,6 +31,7 @@ const ERROR_I18N_KEYS = {
   corrupted: 'errors.corrupted',
   wasm_load_failed: 'errors.wasmLoadFailed',
   worker_crashed: 'errors.workerCrashed',
+  writeFailed: 'errors.writeFailed',
   browser_too_old: 'errors.browserTooOld',
 };
 

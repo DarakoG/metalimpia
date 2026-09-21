@@ -176,19 +176,23 @@ function buildErrorContext(errorKey, file) {
 }
 
 /**
- * Map an exiftoolLoader error code to an i18n error key. The
- * loader rejects with one of:
+ * Map an exiftoolLoader error code to the errorKey string
+ * the orchestrator stores on the AppState.error state. The
+ * errorView.js ERROR_I18N_KEYS table maps this string to a
+ * locale key (or falls back to errors.workerCrashed).
+ *
  *   - 'wasm_load_failed' → engine never came up
- *   - 'corrupted'         → exiftool could not parse the file
- *   - 'write_failed'      → exiftool refused to write the cleaned copy
- *   - 'worker_crashed'    → unhandled throw inside the Worker
- *   - anything else       → treat as generic worker_crashed
+ *   - 'corrupted'        → exiftool could not parse the file
+ *   - 'write_failed'     → exiftool refused to write the cleaned copy
+ *   - 'crashed'          → unhandled throw inside the Worker
+ *                          (write/read runtime issue)
+ *   - anything else      → treat as generic worker_crashed
  */
 function mapLoaderErrorToI18nKey(code) {
   if (code === 'wasm_load_failed') return 'wasm_load_failed';
   if (code === 'corrupted') return 'corrupted';
-  if (code === 'write_failed') return 'corrupted';
-  return 'workerCrashed';
+  if (code === 'write_failed') return 'writeFailed';
+  return 'worker_crashed';
 }
 
 /**

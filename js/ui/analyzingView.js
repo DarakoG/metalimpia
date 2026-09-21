@@ -2,19 +2,27 @@
  * MetaLimpia — analyzing view
  *
  * Renders the loading card the user sees while the ExifTool
- * Worker is processing the dropped file. Two messages are
- * supported:
+ * Worker is processing the dropped file. Three messages are
+ * supported, picked by `state.phase`:
  *
- *   - `analyzing.loading` ("Inicializando ExifTool...") shown
- *     while the WASM is downloaded and the Perl interpreter
- *     initialises on first use in a session.
- *   - `analyzing.message` ("Analizando metadatos...") shown
- *     once the Worker has acknowledged `init` and is reading
- *     the file.
+ *   - 'loading'    → `analyzing.loading` ("Inicializando
+ *                     ExifTool...") shown while the WASM is
+ *                     downloaded and the Perl interpreter
+ *                     initialises on first use in a session.
+ *   - 'reading'    → `analyzing.message` ("Analizando
+ *                     metadatos...") shown once the Worker
+ *                     has acknowledged `init` and is reading
+ *                     the file.
+ *   - 'processing' → `processing.message` ("Limpiando
+ *                     archivo...") shown during Phase 5's
+ *                     Worker `write` op. Reuses the same
+ *                     spinner / card layout so the visual
+ *                     language stays consistent across the
+ *                     three "wait" moments.
  *
  * Phase 3 owns the live progress; this module is purely
  * presentational and follows the same `container.innerHTML = ''`
- * contract used by errorView.
+ * contract used by errorView / doneView.
  */
 
 import { t } from '../i18n.js';
@@ -35,15 +43,19 @@ export function renderAnalyzingView(container, state, handlers) {
   container.innerHTML = '';
 
   // The message key depends on whether we are still waiting
-  // for the Worker to finish `init` (first WASM download) or
-  // already running the read op. The orchestrator passes
-  // `state.phase = 'loading' | 'reading'` from Phase 6; in the
-  // Phase 3 subset the orchestrator only ever passes
-  // `phase: 'loading'` because the transition to results
-  // happens via `setState({ view: 'results', ... })` from the
-  // Worker response, never via this view's onReady.
+  // for the Worker to finish `init` (first WASM download),
+  // already running the read op, or running the write op
+  // (Phase 5). The orchestrator passes
+  // `state.phase = 'loading' | 'reading' | 'processing'`.
   const phase = (state && state.phase) || 'reading';
-  const i18nKey = phase === 'loading' ? 'analyzing.loading' : 'analyzing.message';
+  let i18nKey;
+  if (phase === 'loading') {
+    i18nKey = 'analyzing.loading';
+  } else if (phase === 'processing') {
+    i18nKey = 'processing.message';
+  } else {
+    i18nKey = 'analyzing.message';
+  }
 
   const card = document.createElement('div');
   card.className = 'analyzing-card';
