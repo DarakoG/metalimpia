@@ -1,10 +1,11 @@
 <!DOCTYPE html>
-<html lang="es">
+<html lang="es" data-i18n-title="app.name">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="Revisá y eliminá los metadatos de tus archivos directamente en tu navegador. Sin subir nada a ningún servidor." />
     <meta name="theme-color" content="#1E3A5F" />
+    <meta name="referrer" content="no-referrer" />
     <title>MetaLimpia</title>
     <!-- Strict CSP: same-origin only, no inline scripts, no eval.
          Defense in depth alongside the HTTP header set by GitHub Pages. -->
@@ -15,10 +16,110 @@
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
   <body>
-    <main id="app">
-      <!-- Placeholder content. Real UI is built in Phase 1. -->
-      <h1>MetaLimpia</h1>
-      <p>Cargando&hellip;</p>
+    <!--
+      Phase 1 — landing view only. Per Implementation Plan §4 / Design
+      Spec §4, the page has four view states (landing, analyzing,
+      results, done). Only the landing structure is rendered here;
+      the other states are introduced in later phases.
+
+      Default Spanish copy lives in the markup as a no-JS fallback.
+      The i18n module rewrites any element with data-i18n-key at
+      boot, falling back to the original text when a key is missing.
+    -->
+    <main id="app" data-view="landing">
+      <header class="site-header" role="banner">
+        <div class="container">
+          <a class="site-brand" href="/" aria-label="MetaLimpia — inicio">
+            <span class="site-brand-mark" aria-hidden="true"></span>
+            <span data-i18n-key="app.name">MetaLimpia</span>
+          </a>
+        </div>
+      </header>
+
+      <section class="hero" aria-labelledby="hero-heading">
+        <div class="container">
+          <h1 id="hero-heading" class="hero-heading text-display" data-i18n-key="landing.heading">
+            Revisá y eliminá los metadatos de tus archivos
+          </h1>
+          <p class="hero-subheading text-body" data-i18n-key="landing.subheading">
+            Arrastrá tu archivo o hacé click para seleccionarlo.
+          </p>
+        </div>
+      </section>
+
+      <section class="dropzone-section" aria-labelledby="dropzone-heading">
+        <div class="container">
+          <h2 id="dropzone-heading" class="visually-hidden" data-i18n-key="landing.dropzone">
+            Arrastrá tu archivo acá o hacé click
+          </h2>
+          <!--
+            Phase 1 placeholder. Phase 2 wires drag/drop, click-to-select,
+            and validation. We expose the affordance (tabindex + role)
+            so the keyboard order matches the visual order even now.
+          -->
+          <div
+            id="dropzone"
+            class="dropzone"
+            role="button"
+            tabindex="0"
+            aria-describedby="dropzone-formats"
+            data-i18n-attr="aria-label:landing.dropzone"
+          >
+            <span class="dropzone-icon" aria-hidden="true">&#x2191;</span>
+            <span class="dropzone-text" data-i18n-key="landing.dropzone">
+              Arrastrá tu archivo acá o hacé click
+            </span>
+          </div>
+          <p id="dropzone-formats" class="dropzone-formats text-small" data-i18n-key="landing.supportedFormats">
+            Formatos soportados: JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX
+          </p>
+        </div>
+      </section>
+
+      <section class="verifier-section" aria-labelledby="verifier-heading">
+        <div class="container">
+          <div class="verifier" id="verifier">
+            <div class="verifier-header">
+              <h2 id="verifier-heading" class="verifier-title">
+                <span class="verifier-title-dot" aria-hidden="true"></span>
+                <span data-i18n-key="verifier.title">Verificador de privacidad</span>
+              </h2>
+              <button
+                id="verifier-toggle"
+                class="verifier-toggle"
+                type="button"
+                aria-expanded="false"
+                aria-controls="verifier-detail"
+              >
+                <span class="verifier-toggle-label" data-i18n-key="verifier.expand">
+                  Ver detalle técnico
+                </span>
+              </button>
+            </div>
+            <p class="verifier-summary text-small" data-i18n-key="verifier.summary.zero">
+              Esta página está haciendo 0 conexiones con servidores externos.
+            </p>
+            <div id="verifier-detail" class="verifier-detail" hidden>
+              <p class="verifier-list-label" data-i18n-key="verifier.list.label">
+                Recursos cargados:
+              </p>
+              <ul id="verifier-list" class="verifier-list" aria-live="polite">
+                <li class="verifier-list-empty" data-i18n-key="verifier.list.empty">
+                  Ninguno todavía
+                </li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <footer class="site-footer" role="contentinfo">
+        <div class="container">
+          <p class="site-footer-tagline" data-i18n-key="app.tagline">
+            Tu archivo nunca sale del navegador.
+          </p>
+        </div>
+      </footer>
     </main>
     <script type="module" src="/js/main.js"></script>
   </body>
