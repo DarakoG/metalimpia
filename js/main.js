@@ -62,7 +62,7 @@ import { renderResults } from './ui/metadataView.js';
 import { renderDoneView } from './ui/doneView.js';
 import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
-import { loadExiftool, readMetadata, writeMetadata } from './exiftoolLoader.js';
+import { loadExiftool, readMetadata, writeMetadata, terminateWorker } from './exiftoolLoader.js';
 
 /**
  * Canonical AppState — Data Model §3.1 discriminated union.
@@ -245,7 +245,13 @@ function render() {
     // Reuses the analyzing card layout (same spinner / same
     // card) but with the Phase 5 'processing.message' i18n
     // key, picked by analyzingView's phase-based lookup.
-    renderAnalyzingView(viewContainer, { phase: 'processing' });
+    // Phase 6.6 — pass onCancel so the user can abort the
+    // in-flight Worker write op and return to landing.
+    renderAnalyzingView(
+      viewContainer,
+      { phase: 'processing' },
+      { onCancel: handleCancelProcessing }
+    );
     return;
   }
 
@@ -419,6 +425,21 @@ async function handleRemove(payload) {
       errorKey: mapLoaderErrorToI18nKey(err && err.code),
     });
   }
+}
+
+/**
+ * Phase 6.6 — Cancel the in-flight processing write op.
+ *
+ * Kills the ExifTool Worker (so its pending WASM write
+ * stops), resets the loader's memoisation so the next file
+ * drop spawns a fresh Worker, and returns to landing. The
+ * orchestrator's awaiting `handleRemove` promise stays
+ * pending forever; the GC reclaims it when the page unloads
+ * because nothing in the new state machine references it.
+ */
+function handleCancelProcessing() {
+  terminateWorker();
+  setState({ view: 'landing' });
 }
 
 /**

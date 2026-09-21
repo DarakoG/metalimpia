@@ -10,6 +10,7 @@
   "analyzing.loading": "Inicializando ExifTool...",
   "analyzing.message": "Analizando metadatos...",
   "processing.message": "Limpiando archivo...",
+  "processing.cancel": "Cancelar",
   "results.title": "Tu archivo: {filename}",
   "results.summary": "Se encontraron {count} metadatos.",
   "results.actions.removeAll": "Borrar todo",

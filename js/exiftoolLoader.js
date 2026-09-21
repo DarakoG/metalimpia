@@ -202,6 +202,47 @@ function handleCrash(event) {
 }
 
 /**
+ * Phase 6.6 — kill the live ExifTool Worker and reset the
+ * memoisation so the next `loadExiftool()` call spawns a
+ * fresh Worker with a fresh WASM load.
+ *
+ * Used by the "Cancelar" button on the processing view when
+ * the user wants to abort an in-flight write op. After this:
+ *
+ *   - cachedWorker is null (the dead Worker is GC'd by the
+ *     browser once handleRemove's pending await hangs).
+ *   - initPromise is null (the next loadExiftool creates a
+ *     new one instead of returning the resolved dead Worker).
+ *   - pending is cleared. The in-flight write's promise
+ *     will hang forever; the orchestrator's handleRemove
+ *     await never resolves. This is intentional: by the
+ *     time we return to landing, the orchestrator's state
+ *     has been replaced, so the stuck await leaks nothing
+ *     that the next render needs.
+ *
+ * Safe to call when no Worker is alive (no-op).
+ */
+export function terminateWorker() {
+  if (cachedWorker) {
+    try {
+      cachedWorker.terminate();
+    } catch {
+      // best-effort: a Worker that's already terminated or
+      // never fully constructed should not throw here.
+    }
+    cachedWorker = null;
+  }
+  // Drop the cached init Promise so the next loadExiftool
+  // call spawns a fresh Worker instead of returning the
+  // resolved Promise pointing at the dead one.
+  initPromise = null;
+  // Drop the pending Map. We do NOT reject the entries —
+  // the orchestrator's awaiting promise will just hang,
+  // and the new state machine has already moved on.
+  pending.clear();
+}
+
+/**
  * Send a request to the live Worker and return a Promise that
  * resolves with the response message (or rejects with an Error).
  *

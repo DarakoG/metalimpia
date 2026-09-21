@@ -465,6 +465,16 @@ a {
   margin: 0;
 }
 
+/* Phase 6.6 — the "Cancelar" button on the processing card
+   sits below the spinner + message with the same vertical
+   rhythm as the results / done action bars. The parent's
+   gap rule already spaces children; we just keep the button
+   at its natural width (not stretched to fill the card). */
+.analyzing-card .btn {
+  align-self: center;
+  min-width: 8rem;
+}
+
 /* Results view (Phase 4 — replaces the Phase 3 placeholder).
    Card layout: header (filename + summary) → grouped
    metadata list (collapsible) → action bar. Mobile-first:

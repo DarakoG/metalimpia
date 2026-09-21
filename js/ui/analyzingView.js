@@ -34,10 +34,12 @@ import { t } from '../i18n.js';
  *   loading card. Its innerHTML is reset before rendering.
  * @param {object} [state] — current state. Today only `view` is
  *   meaningful; reserved for Phase 6 progress percentages.
- * @param {{ onReady?: () => void }} [handlers] — reserved for
- *   future progress events. Not consumed in Phase 3.
+ * @param {{ onCancel?: () => void }} [handlers] — when the
+ *   phase is 'processing' and onCancel is provided, a
+ *   "Cancelar" button is appended to the card so the user
+ *   can abort the in-flight write op (Phase 6.6).
  */
-export function renderAnalyzingView(container, state, handlers) {
+export function renderAnalyzingView(container, state, handlers = {}) {
   if (!container) return;
 
   container.innerHTML = '';
@@ -85,5 +87,20 @@ export function renderAnalyzingView(container, state, handlers) {
 
   card.appendChild(spinner);
   card.appendChild(message);
+
+  // Phase 6.6 — Cancel button for the write op. Only shown
+  // during the 'processing' phase. The button is intentionally
+  // a regular .btn (not btn-primary): the primary action
+  // (wait for cleanup) is implicit in the spinner. The user
+  // has to deliberately choose to abandon the in-flight write.
+  if (phase === 'processing' && typeof handlers.onCancel === 'function') {
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'btn';
+    cancelBtn.textContent = t('processing.cancel');
+    cancelBtn.addEventListener('click', handlers.onCancel);
+    card.appendChild(cancelBtn);
+  }
+
   container.appendChild(card);
 }
