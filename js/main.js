@@ -1,33 +1,34 @@
 /*
  * MetaLimpia — entry point / orchestrator
  *
- * Phase 3: extends the Phase 2 file upload flow with the
- * ExifTool WASM integration. The Worker (js/workers/exiftool.
- * worker.js) runs the vendored Perl/WASI runtime and returns
- * metadata JSON. The orchestrator:
+ * Phase 4: replaces the Phase 3 results placeholder with the
+ * full grouped metadata view (js/ui/metadataView.js) driven
+ * by parsed FileMetadata from js/metadataParser.js.
  *
- *   1. Validates the dropped file (Phase 2 unchanged).
- *   2. Reads it into pendingBuffer (Phase 2 unchanged).
- *   3. Transitions to { view: 'analyzing', phase: 'loading' }
- *      so the UI shows the WASM-init message.
- *   4. Calls loadExiftool() — lazy-spawns the Worker and
- *      waits for the init handshake. On failure transitions
- *      to { view: 'error', errorKey: 'wasm_load_failed' }.
- *   5. Transitions to { view: 'analyzing', phase: 'reading' }
- *      so the UI shows the analyzing message.
- *   6. Calls readMetadata(buffer, fileName). On success
- *      transitions to { view: 'results', metadata: raw }
- *      where Phase 4 will replace the placeholder renderer
- *      with the real grouped/classified view. On failure
- *      transitions to an error view (corrupted / worker_crashed).
+ * Pipeline on a valid file drop:
+ *
+ *   1. Validate the file (Phase 2 unchanged).
+ *   2. Read into pendingBuffer (Phase 2 unchanged).
+ *   3. Generate a session-scoped fileId via crypto.randomUUID.
+ *   4. { view: 'analyzing', phase: 'loading' }
+ *      → WASM download + Worker init.
+ *   5. { view: 'analyzing', phase: 'reading' }
+ *      → ExifTool read op.
+ *   6. Read raw ExifTool JSON → metadataParser.parseExiftoolOutput
+ *      → { view: 'results', file, metadata, fileId }.
+ *      The view receives the parsed FileMetadata and the
+ *      orchestrator's callbacks (onBack, onRemove,
+ *      onSelectionChange). Phase 5 will wire onRemove to
+ *      the ExifTool write op.
  *
  * View states exercised by this orchestrator:
  *
  *   landing   — dropzone visible
  *   analyzing — loading or reading message; dropzone hidden
- *   results   — Phase 3 placeholder: a "metadata loaded" card
- *               with the raw tag count and a back button.
- *               Phase 4 replaces the renderer with metadataView.
+ *   results   — Phase 4 metadata list with checkboxes,
+ *               collapse/expand, sensitive badges, and
+ *               action bar (Borrar todo / Borrar
+ *               seleccionados / Cambiar archivo).
  *   error     — dropzone hidden, error card with back button.
  *
  * The state shape is the discriminated union defined in
@@ -40,7 +41,8 @@ import { validateFile, readFile } from './fileHandler.js';
 import { wireUploader } from './ui/uploader.js';
 import { renderErrorView } from './ui/errorView.js';
 import { renderAnalyzingView } from './ui/analyzingView.js';
-import { renderResultsView } from './ui/resultsView.js';
+import { renderResults } from './ui/metadataView.js';
+import { parseExiftoolOutput } from './metadataParser.js';
 import { loadExiftool, readMetadata } from './exiftoolLoader.js';
 
 // AppState per Data Model §3.1 — Phase 3 subset. The full
@@ -53,9 +55,17 @@ let state = { view: 'landing' };
 // rounds.
 let pendingBuffer = null;
 
-// Cached raw metadata returned by the Worker. Phase 4's
-// metadataParser will replace this with a richer structure.
-let lastMetadata = null;
+// Cached last selection. Phase 5's write path needs it;
+// Phase 4 only writes it as a no-op side effect of the
+// onSelectionChange callback so future phases can pick
+// it up without re-plumbing the view.
+let lastSelection = null;
+
+// Session-scoped file id. Generated locally via
+// crypto.randomUUID() so it tracks the file across the
+// landing → analyzing → results transitions without
+// leaking to the network. Data Model §3.2 (UserFile.id).
+let activeFileId = null;
 
 /**
  * Replace the current state, then re-render the view.
@@ -85,7 +95,8 @@ function render() {
     viewContainer.innerHTML = '';
     // Drop any in-memory buffer from a previous round.
     pendingBuffer = null;
-    lastMetadata = null;
+    lastSelection = null;
+    activeFileId = null;
     return;
   }
 
@@ -110,8 +121,22 @@ function render() {
   }
 
   if (state.view === 'results') {
-    renderResultsView(viewContainer, state.file, state.metadata, {
+    renderResults(viewContainer, state.file, state.metadata, {
       onBack: () => setState({ view: 'landing' }),
+      // Phase 4 stub: the action buttons are wired but the
+      // actual ExifTool write op is Phase 5. We log so a
+      // developer can confirm the callback fires.
+      onRemove: ({ removeAll }) => {
+        // eslint-disable-next-line no-console
+        console.info(
+          `MetaLimpia: onRemove stub fired (removeAll=${Boolean(
+            removeAll
+          )}) — Phase 5 will wire the ExifTool write op here.`
+        );
+      },
+      onSelectionChange: (selection) => {
+        lastSelection = selection;
+      },
     });
     return;
   }
@@ -121,6 +146,25 @@ function render() {
  * Build the i18n interpolation context for an error view
  * based on the validator error code and the offending file.
  */
+
+/**
+ * Generate a session-scoped id for a dropped file. Uses
+ * `crypto.randomUUID()` when available (every browser we
+ * support — Phase 9's targets all have it), falling back
+ * to a timestamp + Math.random() combination in the very
+ * unlikely case it isn't present.
+ */
+function generateFileId() {
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch {
+    // Ignore — fall through.
+  }
+  return `file-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function buildErrorContext(errorKey, file) {
   if (errorKey === 'too_large') {
     return { size: Math.round(file.size / (1024 * 1024)) };
@@ -166,6 +210,10 @@ async function handleFile(file) {
 
   try {
     pendingBuffer = await readFile(file);
+    // Generate a session-scoped id for this file. Used by
+    // the parser (FileMetadata.fileId) and threaded through
+    // to Phase 5's MetadataSelection.
+    activeFileId = generateFileId();
   } catch (err) {
     // The browser rejected the read (e.g. the user revoked
     // the permission mid-pick). Treat as a corrupted file
@@ -202,9 +250,16 @@ async function handleFile(file) {
   setState({ view: 'analyzing', phase: 'reading', file });
 
   try {
-    const metadata = await readMetadata(pendingBuffer, file.name);
-    lastMetadata = metadata;
-    setState({ view: 'results', file, metadata });
+    const rawMetadata = await readMetadata(pendingBuffer, file.name);
+    // Parse raw ExifTool JSON into the FileMetadata shape
+    // the view expects (Data Model §3.3). The `formatBinary`
+    // callback threads the results.binaryValue i18n key
+    // through to the parser without making the parser
+    // import i18n.js (which would break Node unit tests).
+    const metadata = parseExiftoolOutput(rawMetadata, activeFileId, {
+      formatBinary: (size) => t('results.binaryValue', { size }),
+    });
+    setState({ view: 'results', file, metadata, fileId: activeFileId });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('MetaLimpia: readMetadata failed', err);
