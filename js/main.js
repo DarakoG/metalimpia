@@ -108,6 +108,17 @@ import { loadExiftool, readMetadata, writeMetadata, terminateWorker } from './ex
 /** @type {AppState} */
 let state = { view: 'landing' };
 
+/** @type {AppState['view'] | null} */
+let previousView = null;
+
+/**
+ * True until the orchestrator has rendered once. The focus
+ * management gate (Phase 6.8) skips the initial render so we
+ * do not steal focus from the browser chrome before the user
+ * has interacted with the page.
+ */
+let isInitialRender = true;
+
 /**
  * Render hint for the `analyzing` view. The canonical state has
  * a single `analyzing` shape; the orchestrator swaps which
@@ -157,7 +168,9 @@ let activeFileId = null;
  * @param {AppState} next
  */
 function setState(next) {
+  const viewChanged = previousView !== next.view;
   state = next;
+  previousView = next.view;
 
   // Out-of-analyzing: clear the render hint so a future
   // transition back to analyzing starts fresh.
@@ -166,6 +179,15 @@ function setState(next) {
   }
 
   render();
+
+  // Phase 6.8 — move focus on view change so screen-reader
+  // users land on the new view's primary heading / CTA.
+  // Skipped on the initial render (don't steal focus from
+  // the browser chrome before the user has interacted).
+  if (viewChanged && !isInitialRender) {
+    manageFocus();
+  }
+  isInitialRender = false;
 }
 
 /**
@@ -519,6 +541,68 @@ async function handleFile(file) {
       view: 'error',
       errorKey: mapLoaderErrorToI18nKey(err && err.code),
     });
+  }
+}
+
+/**
+ * Phase 6.8 — move keyboard focus to the right element for
+ * the current view.
+ *
+ * Per-task 6.8 heuristics:
+ *   - landing     → #dropzone (already focusable).
+ *   - error       → error-message heading (so SR announces
+ *                   the failure cause immediately).
+ *   - done        → primary "Descargar" button (the next
+ *                   sensible action for the user).
+ *   - results     → results-title heading.
+ *   - analyzing / processing → analyzing-message heading.
+ *
+ * The function adds `tabindex="-1"` to non-interactive targets
+ * (heading paragraphs) so they can receive programmatic focus
+ * without entering the tab order.
+ *
+ * Only called on view CHANGES (see setState gate), not on
+ * same-view re-renders (e.g. setAnalyzingPhase swaps the
+ * spinner message but keeps the user where they were).
+ */
+function manageFocus() {
+  const viewContainer = document.getElementById('view-container');
+
+  if (state.view === 'landing') {
+    const dropzone = document.getElementById('dropzone');
+    if (dropzone && typeof dropzone.focus === 'function') {
+      dropzone.focus();
+    }
+    return;
+  }
+
+  if (!viewContainer) return;
+
+  // done: focus the primary "Descargar" CTA.
+  if (state.view === 'done') {
+    const primary = viewContainer.querySelector('.done-actions .btn-primary');
+    if (primary && typeof primary.focus === 'function') {
+      primary.focus();
+      return;
+    }
+  }
+
+  // General heuristic: focus the view's first h1/h2.
+  const heading = viewContainer.querySelector('h1, h2');
+  if (heading) {
+    if (!heading.hasAttribute('tabindex')) {
+      heading.setAttribute('tabindex', '-1');
+    }
+    heading.focus();
+    return;
+  }
+
+  // Fallback: focus the first non-disabled interactive control.
+  const focusable = viewContainer.querySelector(
+    'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+  );
+  if (focusable && typeof focusable.focus === 'function') {
+    focusable.focus();
   }
 }
 
