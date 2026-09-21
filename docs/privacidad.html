@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Política de privacidad de MetaLimpia: tu archivo nunca sale del navegador, no hay servidor, no hay analytics, no hay cookies de rastreo." />
+    <meta name="robots" content="index,follow" />
+    <title>Política de privacidad — MetaLimpia</title>
+    <!--
+      Strict CSP — identical to index.html. The page is fully
+      self-contained (no JS, no external resources); the policy
+      is meta-tag-only because GitHub Pages does not let us set
+      custom HTTP headers. See index.html for the full rationale
+      and the documented `frame-ancestors` / `report-uri` gap.
+    -->
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; manifest-src 'none';"
+    />
+    <link rel="stylesheet" href="/css/styles.css" />
+    <style>
+      /*
+       * Page-local styles. The main app stylesheet is loaded
+       * above for the design tokens; the rules below are the
+       * minimum needed to render this page comfortably.
+       *
+       * Phase 7.5 — the policy page is intentionally low-fi:
+       * no JavaScript, no images, no fonts beyond the system
+       * stack, no analytics, no tracking pixels. Reading the
+       * HTML source IS the privacy audit.
+       */
+
+      .policy-page {
+        max-width: 640px;
+        margin: 0 auto;
+        padding: var(--space-12) var(--space-4) var(--space-16);
+      }
+
+      .policy-back {
+        display: inline-block;
+        margin-bottom: var(--space-6);
+        color: var(--color-primary);
+        text-decoration: none;
+        font-size: 14px;
+        font-weight: 500;
+      }
+
+      .policy-back:hover,
+      .policy-back:focus-visible {
+        text-decoration: underline;
+      }
+
+      .policy-title {
+        margin-bottom: var(--space-3);
+      }
+
+      .policy-lede {
+        margin-bottom: var(--space-8);
+        color: var(--color-text-secondary);
+        font-size: 18px;
+        line-height: 1.55;
+      }
+
+      .policy-section {
+        margin-bottom: var(--space-8);
+      }
+
+      .policy-section h2 {
+        font-size: 22px;
+        font-weight: 600;
+        line-height: 1.25;
+        margin-bottom: var(--space-3);
+        color: var(--color-text-primary);
+      }
+
+      .policy-section p {
+        margin-bottom: var(--space-3);
+        color: var(--color-text-primary);
+      }
+
+      .policy-section ul {
+        margin-bottom: var(--space-3);
+        padding-left: var(--space-6);
+        list-style: disc;
+      }
+
+      .policy-section li {
+        margin-bottom: var(--space-1);
+        color: var(--color-text-primary);
+      }
+
+      .policy-section code,
+      .policy-mono {
+        font-family: var(--font-mono);
+        font-size: 0.95em;
+        color: var(--color-text-primary);
+      }
+
+      .policy-callout {
+        margin: var(--space-6) 0;
+        padding: var(--space-4) var(--space-6);
+        background-color: var(--color-surface);
+        border: 1px solid var(--color-border);
+        border-left: 4px solid var(--color-success);
+        border-radius: var(--radius-md);
+      }
+
+      .policy-callout p:last-child {
+        margin-bottom: 0;
+      }
+
+      .policy-footer {
+        margin-top: var(--space-12);
+        padding-top: var(--space-6);
+        border-top: 1px solid var(--color-border);
+        color: var(--color-text-secondary);
+        font-size: 14px;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="policy-page" id="main-content">
+      <a class="policy-back" href="/">← Volver a MetaLimpia</a>
+
+      <h1 class="policy-title text-display">Política de privacidad</h1>
+      <p class="policy-lede">
+        Tu archivo nunca sale del navegador. No podemos verlo aunque quisiéramos.
+      </p>
+
+      <div class="policy-callout">
+        <p>
+          En MetaLimpia no podemos ver tus archivos aunque quisiéramos. Tu archivo se
+          abre, se procesa y se descarga limpio, todo dentro de tu navegador. No
+          tenemos servidor que reciba archivos. No usamos analytics, ni cookies de
+          rastreo, ni servicios externos. Todo el código es público y auditable.
+        </p>
+      </div>
+
+      <section class="policy-section" aria-labelledby="que-recopilamos">
+        <h2 id="que-recopilamos">Qué datos recopilamos</h2>
+        <p>
+          <strong>Ninguno.</strong> MetaLimpia no tiene servidor. No hay base de
+          datos. No hay cuentas de usuario. No hay formulario de contacto que
+          llegue a un backend.
+        </p>
+        <p>Concretamente:</p>
+        <ul>
+          <li>No usamos cookies (ni propias ni de terceros).</li>
+          <li>No usamos <code>localStorage</code> ni <code>sessionStorage</code>.</li>
+          <li>No usamos <code>IndexedDB</code> ni <code>Cache Storage</code>.</li>
+          <li>No registramos un service worker.</li>
+          <li>No usamos analytics (ni Google Analytics, ni Plausible, ni Matomo, ni nada similar).</li>
+          <li>No usamos servicios de tracking de errores (ni Sentry, ni Bugsnag).</li>
+          <li>No usamos CAPTCHA de terceros.</li>
+          <li>No incrustamos widgets sociales.</li>
+          <li>No usamos fuentes externas (ni Google Fonts ni Adobe Fonts); el sistema usa la pila de fuentes del sistema operativo.</li>
+        </ul>
+      </section>
+
+      <section class="policy-section" aria-labelledby="como-funciona">
+        <h2 id="como-funciona">Cómo funciona MetaLimpia</h2>
+        <p>
+          Cuando arrastrás un archivo a la página, tu navegador lo lee en memoria
+          como un <code>ArrayBuffer</code>. Un Web Worker ejecuta el motor
+          ExifTool (compilado a WebAssembly y empaquetado dentro del sitio)
+          sobre esos bytes. El Worker devuelve los metadatos encontrados; vos
+          elegís cuáles borrar; el Worker escribe una copia limpia y la página
+          la descarga a tu máquina.
+        </p>
+        <p>
+          En ningún momento los bytes de tu archivo salen del proceso del
+          navegador. La única comunicación con la red es la descarga inicial
+          del HTML, CSS, JavaScript y (la primera vez que lo necesitás) del
+          archivo WebAssembly — todo desde el mismo dominio.
+        </p>
+        <p>
+          El verificador de privacidad que ves en la página principal enumera en
+          tiempo real todos los recursos cargados por el navegador. En operación
+          correcta, el contador de "conexiones externas" siempre es 0.
+        </p>
+      </section>
+
+      <section class="policy-section" aria-labelledby="porque-confiar">
+        <h2 id="porque-confiar">Por qué podés confiar</h2>
+        <p>
+          El proyecto es de código abierto bajo la licencia MIT. El código
+          fuente completo está disponible en GitHub:
+        </p>
+        <p>
+          <a href="https://github.com/darakog/metalimpia">github.com/darakog/metalimpia</a>
+        </p>
+        <p>
+          Podés auditar vos mismo que no hay llamadas de red inesperadas. La
+          forma más rápida es abrir las DevTools del navegador (F12), ir a la
+          pestaña Network y usar la página. La lista debería mostrar únicamente
+          recursos del dominio metalimpia.app (o
+          <code class="policy-mono">darakog.github.io/metalimpia/</code>).
+        </p>
+        <p>
+          En el futuro (Phase 8 del plan de implementación) agregaremos un test
+          automático de "privacy guard" que rompe el build si se detecta una
+          solicitud a un dominio externo.
+        </p>
+      </section>
+
+      <section class="policy-section" aria-labelledby="limitaciones">
+        <h2 id="limitaciones">Limitaciones honestas</h2>
+        <p>
+          MetaLimpia se sirve desde GitHub Pages, que no permite configurar
+          headers HTTP personalizados. Por eso la política de seguridad (CSP)
+          se aplica vía <code>&lt;meta&gt;</code> en el HTML y no vía header.
+          La forma <code>&lt;meta&gt;</code> cubre todas las directivas excepto
+          <code>frame-ancestors</code>, que los navegadores ignoran cuando
+          viene del <code>&lt;meta&gt;</code>. La consecuencia es que un sitio
+          malicioso <em>podría</em> incrustar MetaLimpia en un iframe. Como la
+          app no tiene acciones que cambien estado, el peor escenario es
+          vandalismo visual. Si te preocupa esto, podés ver la app directamente
+          desde su URL en lugar de hacerlo desde otro sitio.
+        </p>
+        <p>
+          Además, MetaLimpia no protege contra: malware en tu propia máquina,
+          una extensión de navegador comprometida, que vos mismo vuelvas a
+          meter metadatos en el archivo limpio después, o que un observador de
+          red vea que visitaste el sitio (para eso está Tor).
+        </p>
+      </section>
+
+      <section class="policy-section" aria-labelledby="tus-derechos">
+        <h2 id="tus-derechos">Tus derechos</h2>
+        <p>
+          Como no recopilamos ningún dato, no tenemos nada que borrar, exportar,
+          ni rectificar. Sos dueño de tu archivo en todo momento: lo abrís en tu
+          navegador, se procesa en tu navegador, y se descarga limpio a tu
+          máquina.
+        </p>
+      </section>
+
+      <section class="policy-section" aria-labelledby="cambios">
+        <h2 id="cambios">Cambios a esta política</h2>
+        <p>
+          Si MetaLimpia alguna vez agrega una funcionalidad que cambie el modelo
+          de privacidad (por ejemplo, sincronización en la nube, cuentas de
+          usuario, o analytics opcionales), actualizaremos esta página antes de
+          que el cambio se publique, y lo anunciaremos en el repositorio público.
+        </p>
+      </section>
+
+      <section class="policy-section" aria-labelledby="contacto">
+        <h2 id="contacto">Contacto</h2>
+        <p>
+          Para preguntas o reportes sobre privacidad, abrí un issue público en
+          el repositorio:
+        </p>
+        <p>
+          <a href="https://github.com/darakog/metalimpia/issues">github.com/darakog/metalimpia/issues</a>
+        </p>
+      </section>
+
+      <footer class="policy-footer">
+        <p>MetaLimpia · Licencia MIT · <a href="/">Volver al inicio</a></p>
+      </footer>
+    </main>
+  </body>
+</html>

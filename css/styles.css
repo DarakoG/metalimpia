@@ -1088,6 +1088,27 @@ a {
   font-size: 14px;
 }
 
+/* Phase 7.5 — secondary footer link row. Sits below the tagline
+   and stays out of the way visually (smaller text, secondary
+   colour) while remaining discoverable for users who want to
+   read the full privacy stance. The link is same-origin
+   (/privacidad.html) so no CSP concerns. */
+.site-footer-links {
+  margin-top: var(--space-2);
+  font-size: 13px;
+}
+
+.site-footer-links a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.site-footer-links a:hover,
+.site-footer-links a:focus-visible {
+  color: var(--color-primary);
+}
+
 /* =========================================================================
    Responsive — mobile-first; max-width 720px centered on tablet/desktop.
    Breakpoints follow the Design Spec "Layout" guidance.
