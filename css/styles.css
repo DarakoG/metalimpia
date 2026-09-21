@@ -402,6 +402,13 @@ a {
    quiet signal that this is an error without using a loud
    red background; the message text stays at text-primary for
    AA contrast per Phase 1 WCAG table. */
+.error-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-4);
+}
+
 .error-message {
   padding: var(--space-6);
   background-color: var(--color-surface);
@@ -411,9 +418,8 @@ a {
   color: var(--color-text-primary);
 }
 
-.error-message + .btn {
-  margin-top: var(--space-4);
-  display: inline-flex;
+.error-card .btn {
+  align-self: flex-start;
 }
 
 /* Analyzing view. Phase 3 turns the previous stub into a

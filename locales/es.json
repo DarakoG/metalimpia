@@ -40,6 +40,8 @@
   "errors.empty": "Este archivo está vacío. Probá con otro archivo.",
   "errors.formatsList": "JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX",
   "errors.corrupted": "El archivo parece estar dañado. Probá con otra copia.",
+  "errors.unsupported": "No pudimos leer este formato. Probá con otra copia del archivo.",
+  "errors.crashed": "El motor de lectura falló. Recargá la página y probá de nuevo.",
   "errors.wasmLoadFailed": "No pudimos cargar el motor. Verificá tu conexión y recargá la página.",
   "errors.workerCrashed": "Ocurrió un error inesperado. Recargá la página y probá de nuevo.",
   "errors.writeFailed": "No pudimos limpiar el archivo. Probá con otra copia.",

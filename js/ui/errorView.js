@@ -23,15 +23,22 @@ import { t } from '../i18n.js';
  * Map validator / orchestrator error codes to i18n keys.
  * The fallback catches typos in the orchestrator and surfaces
  * the generic "unexpected error" message rather than throwing.
+ *
+ * State errorKey values follow Data Model §3.1 (snake_case
+ * for the Worker's protocol-aligned codes, snake_case for the
+ * validator's pipeline codes). Locale keys keep the existing
+ * camelCase to avoid breaking Phase 2/5 translations.
  */
 const ERROR_I18N_KEYS = {
   empty: 'errors.empty',
   too_large: 'errors.tooLarge',
   unsupported_format: 'errors.unsupportedFormat',
   corrupted: 'errors.corrupted',
+  unsupported: 'errors.unsupported',
+  crashed: 'errors.crashed',
+  write_failed: 'errors.writeFailed',
   wasm_load_failed: 'errors.wasmLoadFailed',
   worker_crashed: 'errors.workerCrashed',
-  writeFailed: 'errors.writeFailed',
   browser_too_old: 'errors.browserTooOld',
 };
 
@@ -59,8 +66,18 @@ export function renderErrorView(container, errorKey, context, { onBack }) {
   // is safe; we are not inserting user data.
   container.innerHTML = '';
 
+  // Phase 6.7 — the error card is a labeled region inside
+  // <main>. role="region" needs an accessible name; we point
+  // aria-labelledby at the message element below, which is
+  // the only meaningful heading the screen reader needs.
+  const card = document.createElement('div');
+  card.className = 'error-card';
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-labelledby', 'error-message');
+
   const messageEl = document.createElement('p');
   messageEl.className = 'error-message text-body';
+  messageEl.id = 'error-message';
   // role="alert" makes screen readers announce the message
   // immediately on insertion. The container already has
   // aria-live="polite" in markup, but alert is the right
@@ -76,6 +93,7 @@ export function renderErrorView(container, errorKey, context, { onBack }) {
     backBtn.addEventListener('click', onBack);
   }
 
-  container.appendChild(messageEl);
-  container.appendChild(backBtn);
+  card.appendChild(messageEl);
+  card.appendChild(backBtn);
+  container.appendChild(card);
 }

@@ -98,6 +98,13 @@ function setState(next) {
 /**
  * Render the current state into the DOM. Idempotent —
  * safe to call multiple times.
+ *
+ * Phase 6.7 — sets aria-busy on the view container for the
+ * two async views (analyzing + processing). Screen readers
+ * suspend their live-region announcements while aria-busy is
+ * true and re-announce when it flips to false, so this keeps
+ * partial-phase swaps ("Inicializando..." → "Analizando...")
+ * from being announced as separate events.
  */
 function render() {
   const app = document.getElementById('app');
@@ -106,6 +113,10 @@ function render() {
   if (!app || !dropzoneSection || !viewContainer) return;
 
   app.dataset.view = state.view;
+
+  const isAsyncView =
+    state.view === 'analyzing' || state.view === 'processing';
+  viewContainer.setAttribute('aria-busy', String(isAsyncView));
 
   if (state.view === 'landing') {
     dropzoneSection.hidden = false;
@@ -216,8 +227,14 @@ function buildErrorContext(errorKey, file) {
  * errorView.js ERROR_I18N_KEYS table maps this string to a
  * locale key (or falls back to errors.workerCrashed).
  *
+ * Phase 6 normalises the orchestrator's error keys to the
+ * snake_case codes the Data Model §3.5 Worker protocol uses
+ * — the loader's `write_failed` no longer aliases to the
+ * camelCase 'writeFailed' that Phase 5 introduced.
+ *
  *   - 'wasm_load_failed' → engine never came up
  *   - 'corrupted'        → exiftool could not parse the file
+ *   - 'unsupported'      → exiftool refused the file type
  *   - 'write_failed'     → exiftool refused to write the cleaned copy
  *   - 'crashed'          → unhandled throw inside the Worker
  *                          (write/read runtime issue)
@@ -226,7 +243,9 @@ function buildErrorContext(errorKey, file) {
 function mapLoaderErrorToI18nKey(code) {
   if (code === 'wasm_load_failed') return 'wasm_load_failed';
   if (code === 'corrupted') return 'corrupted';
-  if (code === 'write_failed') return 'writeFailed';
+  if (code === 'unsupported') return 'unsupported';
+  if (code === 'write_failed') return 'write_failed';
+  if (code === 'crashed') return 'crashed';
   return 'worker_crashed';
 }
 

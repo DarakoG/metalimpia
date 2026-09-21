@@ -59,6 +59,11 @@ export function renderAnalyzingView(container, state, handlers) {
 
   const card = document.createElement('div');
   card.className = 'analyzing-card';
+  // Phase 6.7 — labeled region inside <main>. The message
+  // doubles as the heading for this view (it's the only
+  // text), so we point aria-labelledby at its id.
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-labelledby', 'analyzing-message');
 
   // Pure-CSS spinner — no external assets, no JS animation
   // loops. honour prefers-reduced-motion via the global
@@ -69,11 +74,13 @@ export function renderAnalyzingView(container, state, handlers) {
 
   const message = document.createElement('p');
   message.className = 'analyzing-message text-body';
+  message.id = 'analyzing-message';
   // Polite announcement so screen readers do not interrupt
   // the user. The card sits inside an aria-live=polite
   // container (#view-container) already, so this is the
   // inner announcement for the change of phase.
   message.setAttribute('role', 'status');
+  message.setAttribute('aria-live', 'polite');
   message.textContent = t(i18nKey);
 
   card.appendChild(spinner);

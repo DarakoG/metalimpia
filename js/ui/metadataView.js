@@ -161,6 +161,12 @@ export function renderResults(container, file, metadata, callbacks = {}) {
 
   const card = document.createElement('div');
   card.className = 'results-card';
+  // Phase 6.7 — the results card is a labeled region inside
+  // <main>. role="region" needs an accessible name; we point
+  // aria-labelledby at the filename heading the header builds
+  // (id "results-title" — see buildHeader below).
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-labelledby', 'results-title');
   card.appendChild(buildHeader(file, model));
   card.appendChild(buildSummary(model));
 
@@ -223,6 +229,7 @@ function buildHeader(file, model) {
 
   const title = document.createElement('h2');
   title.className = 'results-title text-h1';
+  title.id = 'results-title';
   title.textContent = t('results.title', {
     filename: file && file.name ? file.name : '',
   });

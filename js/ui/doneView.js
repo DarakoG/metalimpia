@@ -81,6 +81,11 @@ export function renderDoneView(container, file, data, callbacks = {}) {
 
   const card = document.createElement('div');
   card.className = 'done-card';
+  // Phase 6.7 — labeled region inside <main>. The done-title
+  // heading doubles as the accessible name; we point
+  // aria-labelledby at its id.
+  card.setAttribute('role', 'region');
+  card.setAttribute('aria-labelledby', 'done-title');
 
   // Check icon — same circular-badge treatment as the
   // results-empty success state. Reuses the .results-empty-icon
@@ -95,6 +100,7 @@ export function renderDoneView(container, file, data, callbacks = {}) {
   // Title — "Archivo limpio".
   const title = document.createElement('h2');
   title.className = 'done-title text-h1';
+  title.id = 'done-title';
   title.textContent = t('done.title');
   card.appendChild(title);
 
