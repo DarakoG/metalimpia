@@ -86,6 +86,8 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     stdout: 'pipe',
     stderr: 'pipe',
-    timeout: 60_000,
+    // CI runners are slower; 120 s headroom for the first vite
+    // preview startup (which has to compile + serve 25 MB WASM).
+    timeout: 120_000,
   },
 });
