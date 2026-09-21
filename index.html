@@ -86,6 +86,23 @@
         </div>
       </section>
 
+      <!--
+        Phase 2 view container. Holds the error and analyzing
+        views. aria-live="polite" so screen readers announce
+        new content when the orchestrator swaps the innerHTML.
+        The dropzone-section is hidden while this section is
+        visible, so the user only sees one set of affordances
+        at a time. Sits inside <main> so it lives under the
+        same content landmark.
+      -->
+      <section
+        id="view-container"
+        class="view-container"
+        aria-live="polite"
+        aria-atomic="true"
+        hidden
+      ></section>
+
       <section class="verifier-section" aria-labelledby="verifier-heading">
         <div class="container">
           <div class="verifier" id="verifier">
