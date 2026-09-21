@@ -786,6 +786,94 @@ a {
   border-color: var(--color-border-strong);
 }
 
+/* =========================================================================
+   Done view (Phase 5) — confirmation + download CTA after the Worker
+   write op returns the cleaned file. Mirrors the .results-card visual
+   language (same surface, same border, same radius) so the transition
+   from results → done feels like a continuation of the same flow.
+   ========================================================================= */
+
+.done-card {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-6);
+  padding: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  /* No top border accent — the done state is positive and the
+     success icon (below) carries the visual signal. */
+}
+
+@media (min-width: 720px) {
+  .done-card {
+    padding: var(--space-8);
+    gap: var(--space-8);
+  }
+}
+
+/* Center the icon + title + summary on the done card so the
+   success message reads as a single visual block, with the
+   action buttons anchored below. */
+.done-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* Slightly larger than the empty-state icon so the success
+     feedback is unmistakable at the end of a flow. */
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background-color: var(--color-success);
+  color: var(--color-text-inverse);
+  font-size: 28px;
+  font-weight: 700;
+  /* Self-center inside the card so it sits above the title
+     without the parent needing flex centering for every child. */
+  margin: 0 auto;
+}
+
+.done-title {
+  margin: 0;
+  text-align: center;
+}
+
+.done-summary {
+  margin: 0;
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Reuse the same action-bar pattern as .results-actions:
+   stacked on mobile, horizontal on desktop with the primary
+   button first. */
+.done-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+@media (min-width: 720px) {
+  .done-actions {
+    flex-direction: row;
+    justify-content: center;
+    gap: var(--space-3);
+  }
+}
+
+.done-actions .btn {
+  width: 100%;
+}
+
+@media (min-width: 720px) {
+  .done-actions .btn {
+    width: auto;
+  }
+}
+
 /* When a section is hidden via the HTML `hidden` attribute,
    browsers hide it. Re-assert it here so a future rule does
    not accidentally override the attribute semantics. */

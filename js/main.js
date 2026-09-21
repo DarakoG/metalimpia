@@ -1,9 +1,10 @@
 /*
  * MetaLimpia — entry point / orchestrator
  *
- * Phase 4: replaces the Phase 3 results placeholder with the
- * full grouped metadata view (js/ui/metadataView.js) driven
- * by parsed FileMetadata from js/metadataParser.js.
+ * Phase 5: wires the existing onRemove callbacks from the
+ * Phase 4 results view to the Worker's `write` op and adds
+ * the `processing` and `done` view states to the state
+ * machine.
  *
  * Pipeline on a valid file drop:
  *
@@ -16,24 +17,35 @@
  *      → ExifTool read op.
  *   6. Read raw ExifTool JSON → metadataParser.parseExiftoolOutput
  *      → { view: 'results', file, metadata, fileId }.
- *      The view receives the parsed FileMetadata and the
- *      orchestrator's callbacks (onBack, onRemove,
- *      onSelectionChange). Phase 5 will wire onRemove to
- *      the ExifTool write op.
+ *   7. User clicks "Borrar todo" or "Borrar seleccionados":
+ *      a. { view: 'processing', phase: 'processing', file, selection }
+ *         → Worker `write` op with the live tagsToRemove.
+ *      b. On success → { view: 'done', file, cleanedBuffer,
+ *                        downloadName, removedCount }.
+ *         The download button triggers a same-origin Blob URL
+ *         download (js/ui/downloader.js). The "Procesar otro
+ *         archivo" button returns to landing.
+ *      c. On failure → { view: 'error', errorKey } mapped from
+ *         the Worker's error code.
  *
  * View states exercised by this orchestrator:
  *
- *   landing   — dropzone visible
- *   analyzing — loading or reading message; dropzone hidden
- *   results   — Phase 4 metadata list with checkboxes,
- *               collapse/expand, sensitive badges, and
- *               action bar (Borrar todo / Borrar
- *               seleccionados / Cambiar archivo).
- *   error     — dropzone hidden, error card with back button.
+ *   landing     — dropzone visible
+ *   analyzing   — loading or reading message; dropzone hidden
+ *   results     — Phase 4 metadata list with checkboxes,
+ *                 collapse/expand, sensitive badges, and
+ *                 action bar (Borrar todo / Borrar
+ *                 seleccionados / Cambiar archivo).
+ *   processing  — Phase 5 spinner card with "Limpiando
+ *                 archivo..." while the Worker runs the write op.
+ *   done        — Phase 5 confirmation card with the cleaned
+ *                 count, a "Descargar" primary action, and a
+ *                 "Procesar otro archivo" secondary action.
+ *   error       — dropzone hidden, error card with back button.
  *
  * The state shape is the discriminated union defined in
- * Data Model §3.1. The full state machine (processing, done)
- * is completed in Phase 6.
+ * Data Model §3.1, extended with `downloadName` for `done`
+ * (the spec's CleanedFile §5.1 model also carries downloadName).
  */
 
 import { init as initI18n, t } from './i18n.js';
@@ -42,23 +54,29 @@ import { wireUploader } from './ui/uploader.js';
 import { renderErrorView } from './ui/errorView.js';
 import { renderAnalyzingView } from './ui/analyzingView.js';
 import { renderResults } from './ui/metadataView.js';
+import { renderDoneView } from './ui/doneView.js';
+import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
-import { loadExiftool, readMetadata } from './exiftoolLoader.js';
+import { loadExiftool, readMetadata, writeMetadata } from './exiftoolLoader.js';
 
-// AppState per Data Model §3.1 — Phase 3 subset. The full
-// state machine (processing, done) is completed in Phase 6.
+// AppState per Data Model §3.1 — Phase 5 subset. Phase 6 will
+// harden the transitions; the shape is already stable.
 let state = { view: 'landing' };
 
 // Holds the ArrayBuffer of the file that the user dropped.
-// Phase 3 hands it to the ExifTool worker. Cleared on every
-// transition back to landing so memory is released between
-// rounds.
+// Phase 3 hands it to the ExifTool worker. Phase 5 also
+// reuses it as the input to the write op (the Worker
+// re-reads the bytes; we never feed the cleaned buffer back
+// into a second write). Cleared on every transition back to
+// landing so memory is released between rounds.
 let pendingBuffer = null;
 
-// Cached last selection. Phase 5's write path needs it;
-// Phase 4 only writes it as a no-op side effect of the
-// onSelectionChange callback so future phases can pick
-// it up without re-plumbing the view.
+// Cached last selection. Phase 5 does NOT rely on this for
+// the write path — the metadataView passes the live selection
+// in the onRemove payload (see js/ui/metadataView.js). This
+// variable is kept for future analytics / Phase 6 keyboard
+// shortcut work and so the onSelectionChange contract from
+// Phase 4 stays intact.
 let lastSelection = null;
 
 // Session-scoped file id. Generated locally via
@@ -93,17 +111,18 @@ function render() {
     dropzoneSection.hidden = false;
     viewContainer.hidden = true;
     viewContainer.innerHTML = '';
-    // Drop any in-memory buffer from a previous round.
+    // Drop any in-memory buffer from a previous round so
+    // memory is released between file picks (Data Model §7.2).
     pendingBuffer = null;
     lastSelection = null;
     activeFileId = null;
     return;
   }
 
-  // error / analyzing / results all hide the dropzone and
-  // show the shared view container. Each renderer resets the
-  // container itself, so we never accumulate DOM nodes
-  // across transitions.
+  // error / analyzing / processing / results / done all hide
+  // the dropzone and show the shared view container. Each
+  // renderer resets the container itself, so we never
+  // accumulate DOM nodes across transitions.
   dropzoneSection.hidden = true;
   viewContainer.hidden = false;
   viewContainer.innerHTML = '';
@@ -120,23 +139,39 @@ function render() {
     return;
   }
 
+  if (state.view === 'processing') {
+    // Reuses the analyzing card layout (same spinner / same
+    // card) but with the Phase 5 'processing.message' i18n
+    // key, picked by analyzingView's phase-based lookup.
+    renderAnalyzingView(viewContainer, { phase: 'processing', file: state.file });
+    return;
+  }
+
   if (state.view === 'results') {
     renderResults(viewContainer, state.file, state.metadata, {
       onBack: () => setState({ view: 'landing' }),
-      // Phase 4 stub: the action buttons are wired but the
-      // actual ExifTool write op is Phase 5. We log so a
-      // developer can confirm the callback fires.
-      onRemove: ({ removeAll }) => {
-        // eslint-disable-next-line no-console
-        console.info(
-          `MetaLimpia: onRemove stub fired (removeAll=${Boolean(
-            removeAll
-          )}) — Phase 5 will wire the ExifTool write op here.`
-        );
-      },
+      onRemove: handleRemove,
       onSelectionChange: (selection) => {
         lastSelection = selection;
       },
+    });
+    return;
+  }
+
+  if (state.view === 'done') {
+    renderDoneView(viewContainer, state.file, {
+      cleanedBuffer: state.cleanedBuffer,
+      removedCount: state.removedCount,
+      downloadName: state.downloadName,
+    }, {
+      onDownload: () => {
+        triggerDownload(
+          state.cleanedBuffer,
+          state.downloadName,
+          state.file && state.file.type ? state.file.type : undefined
+        );
+      },
+      onAnother: () => setState({ view: 'landing' }),
     });
     return;
   }
@@ -193,6 +228,90 @@ function mapLoaderErrorToI18nKey(code) {
   if (code === 'corrupted') return 'corrupted';
   if (code === 'write_failed') return 'writeFailed';
   return 'worker_crashed';
+}
+
+/**
+ * Orchestrate the Worker `write` op from the results view's
+ * action bar. Called with the live selection payload from
+ * metadataView (Data Model §3.4 / Implementation Plan §8
+ * task 5.6).
+ *
+ * Flow:
+ *   1. Snapshot the file reference so we can render the
+ *      processing card if the user clicks mid-transition.
+ *   2. Switch to the 'processing' view so the user sees the
+ *      Phase 5 "Limpiando archivo..." spinner card.
+ *   3. Call writeMetadata with the live tagsToRemove /
+ *      removeAll pair. The Worker runs exiftool with
+ *      `-unsafe -All= -o <tmp> <in>` (removeAll) or
+ *      `-Tag= -o <tmp> <in>` (selective) per Phase 5.1.
+ *   4. On success → 'done' view with the cleaned buffer,
+ *      the download name, and the user-visible "removed"
+ *      count (number of tags the user asked to remove).
+ *   5. On failure → 'error' view mapped through
+ *      mapLoaderErrorToI18nKey.
+ *
+ * The 'processing' state is not a placeholder — we do not
+ * pre-allocate the cleanedBuffer on failure; the user can
+ * retry from the error view's back button (which lands
+ * them on results via Phase 6's error → results wiring).
+ *
+ * @param {{removeAll: boolean, fileId?: string, tagsToRemove?: string[] | null}} payload
+ */
+async function handleRemove(payload) {
+  const removeAll = Boolean(payload && payload.removeAll);
+  const tagsToRemove =
+    payload && Array.isArray(payload.tagsToRemove)
+      ? payload.tagsToRemove
+      : [];
+
+  // Need a file reference + buffer to write. The results
+  // view only mounts when state has both, so this should
+  // always be set; the guard is for robustness.
+  const file = state.view === 'results' ? state.file : null;
+  if (!file || !pendingBuffer) {
+    setState({
+      view: 'error',
+      errorKey: 'worker_crashed',
+    });
+    return;
+  }
+
+  setState({ view: 'processing', phase: 'processing', file });
+
+  try {
+    const cleanedBuffer = await writeMetadata(pendingBuffer, file.name, {
+      removeAll,
+      tagsToRemove,
+    });
+
+    const downloadName = buildCleanedFilename(file.name);
+    // "Se eliminaron N metadatos." — the count is what the
+    // user ASKED to remove, not what ExifTool actually
+    // erased (we do not re-read the file to count). For
+    // removeAll that equals state.metadata.totalCount; for
+    // selective it equals tagsToRemove.length. Edge case:
+    // an empty metadata file with removeAll → totalCount
+    // is 0 and we still produce a download.
+    const removedCount = removeAll
+      ? state.metadata.totalCount
+      : tagsToRemove.length;
+
+    setState({
+      view: 'done',
+      file,
+      cleanedBuffer,
+      downloadName,
+      removedCount,
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('MetaLimpia: writeMetadata failed', err);
+    setState({
+      view: 'error',
+      errorKey: mapLoaderErrorToI18nKey(err && err.code),
+    });
+  }
 }
 
 /**

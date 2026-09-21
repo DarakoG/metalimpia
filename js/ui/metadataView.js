@@ -21,9 +21,21 @@
  *                   onSelectionChange fires on every checkbox
  *                   toggle with the resulting MetadataSelection
  *                   shape (Data Model §3.4). onBack / onRemove
- *                   fire on their respective buttons; both
- *                   are no-ops in Phase 4 — Phase 5 wires
- *                   onRemove to the ExifTool write op.
+ *                   fire on their respective buttons.
+ *                   onRemove signature (Phase 5):
+ *                       onRemove({
+ *                         removeAll: boolean,
+ *                         fileId: string,
+ *                         tagsToRemove: string[] | null
+ *                       })
+ *                   tagsToRemove is the live selection (NOT
+ *                   derived from the last onSelectionChange
+ *                   callback — it is read from the model's
+ *                   current state at click time so a stale
+ *                   orchestrator cache can never send the
+ *                   Worker the wrong set of tags).
+ *                   null is sent for removeAll (the Worker
+ *                   interprets missing tagsToRemove as "all").
  *
  * Rendering contract:
  *
@@ -111,7 +123,11 @@ function truncate(value, limit) {
  *     removeAll: boolean,
  *   }) => void,
  *   onBack?: () => void,
- *   onRemove?: (mode: { removeAll: boolean }) => void,
+ *   onRemove?: (mode: {
+ *     removeAll: boolean,
+ *     fileId: string,
+ *     tagsToRemove: string[] | null,
+ *   }) => void,
  * }} callbacks
  */
 export function renderResults(container, file, metadata, callbacks = {}) {
@@ -388,6 +404,36 @@ function computeToggleLabel(group) {
 }
 
 /**
+ * Walk the live model and return the canonical tag IDs the
+ * user currently has checked. The array order follows the
+ * model order (groups first, then tags in declaration order);
+ * duplicates are impossible because tag.id is canonicalised
+ * by metadataParser and the UI never inserts the same tag
+ * twice.
+ *
+ * Phase 5: used by the "Borrar seleccionados" click handler
+ * to pass the live selection to the orchestrator's write
+ * call. The view — not the orchestrator's cached
+ * `lastSelection` — is the source of truth at click time.
+ *
+ * @param {{groups: Array<{tags: Array<{id: string, selected: boolean}>}>}} model
+ * @returns {string[]}
+ */
+function collectSelectedIds(model) {
+  if (!model || !Array.isArray(model.groups)) return [];
+  const ids = [];
+  for (const group of model.groups) {
+    if (!Array.isArray(group.tags)) continue;
+    for (const tag of group.tags) {
+      if (tag && tag.selected && typeof tag.id === 'string') {
+        ids.push(tag.id);
+      }
+    }
+  }
+  return ids;
+}
+
+/**
  * Build a single tag row: checkbox + label + value.
  * The row is wrapped in a <label> so the entire row is
  * clickable, and the checkbox state stays in sync with
@@ -467,17 +513,19 @@ function buildActions({ onBack, onRemove, model }) {
   const bar = document.createElement('div');
   bar.className = 'results-actions';
 
-  // Phase 4: these are enabled and styled, but onRemove is
-  // a no-op stub from main.js — Phase 5 wires the actual
-  // ExifTool write op. The buttons reflect current
-  // selection state in their enabled-ness: Borrar
-  // seleccionados is disabled when nothing is selected.
+  // Phase 5: these fire onRemove with the live selection.
+  // For "Borrar todo", tagsToRemove is null (the Worker
+  // interprets it as "everything writable"). For "Borrar
+  // seleccionados", tagsToRemove is the current selectedIds
+  // array read from the model AT CLICK TIME — not from the
+  // last onSelectionChange callback — so a stale orchestrator
+  // cache cannot send the Worker the wrong set of tags.
   const removeAllBtn = document.createElement('button');
   removeAllBtn.type = 'button';
   removeAllBtn.className = 'btn btn-primary';
   removeAllBtn.textContent = t('results.actions.removeAll');
   removeAllBtn.addEventListener('click', () => {
-    if (onRemove) onRemove({ removeAll: true, fileId: model.fileId });
+    if (onRemove) onRemove({ removeAll: true, fileId: model.fileId, tagsToRemove: null });
   });
   bar.appendChild(removeAllBtn);
 
@@ -486,7 +534,11 @@ function buildActions({ onBack, onRemove, model }) {
   removeSelectedBtn.className = 'btn';
   removeSelectedBtn.textContent = t('results.actions.removeSelected');
   removeSelectedBtn.addEventListener('click', () => {
-    if (onRemove) onRemove({ removeAll: false, fileId: model.fileId });
+    if (onRemove) onRemove({
+      removeAll: false,
+      fileId: model.fileId,
+      tagsToRemove: collectSelectedIds(model),
+    });
   });
   bar.appendChild(removeSelectedBtn);
 
