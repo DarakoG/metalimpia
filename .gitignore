@@ -37,6 +37,7 @@ Thumbs.db
 test-results/
 playwright-report/
 playwright/.cache/
+tests/screenshots/
 
 # AI agent system (private to user's local setup; not part of the project)
 .agents/
