@@ -1,5 +1,8 @@
 # MetaLimpia
 
+[![Privacy Guard](https://github.com/DarakoG/metalimpia/actions/workflows/deploy.yml/badge.svg)](https://github.com/DarakoG/metalimpia/actions/workflows/deploy.yml)
+[![0 external requests](https://img.shields.io/badge/privacy-0%20external%20requests-brightgreen)](docs/PRIVACY_AUDIT.md)
+
 > Tu archivo nunca sale del navegador. No podemos verlo aunque quisiéramos.
 
 MetaLimpia es una página web gratuita que te permite **revisar y eliminar los metadatos** de tus archivos (fotos, PDFs, documentos de Office) **directamente en tu navegador**, sin subirlos a ningún servidor.
@@ -65,6 +68,48 @@ npm run dev     # servidor local de desarrollo
 npm run build   # generar build de producción en dist/
 npm run preview # servir el build localmente
 ```
+
+### Testing
+
+La privacidad se garantiza con una **suite automatizada de Playwright** que corre en cada push a `main`. Si una prueba falla, el deploy a GitHub Pages se bloquea (el job `deploy` en `.github/workflows/deploy.yml` tiene `needs: build → needs: test`).
+
+#### Cómo correr los tests localmente
+
+```bash
+# Una vez por máquina:
+npm install
+npx playwright install chromium
+
+# Cada vez:
+node scripts/generate-test-fixture.mjs   # genera tests/fixtures/sample-with-author.png
+npx playwright test                       # corre la suite
+```
+
+Chromium es el único navegador instalado — la decisión de la Fase 8 es explícita (la matriz cross-browser es trabajo de la Fase 9 / QA manual). El binario del navegador vive en `~/.cache/ms-playwright/` (Linux/macOS) o `%LOCALAPPDATA%\ms-playwright\` (Windows) y **no** se commitea.
+
+#### Qué cubre cada spec
+
+| Archivo                              | Qué verifica                                                                                                                                                              |
+|--------------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `tests/privacy-guard.spec.js`        | **El gate.** Corre el flujo completo (drop → analyze → results → clean → download) y verifica que cada `request` capturado por Playwright sea same-origin. Falla el deploy si cualquier request cruza el origen. |
+| `tests/full-flow.spec.js`            | Verificación funcional de la máquina de estados: drop de archivo → la tarjeta de resultados muestra el tag `Author` clasificado bajo el grupo `author`. Cobertura mínima para detectar regresiones del parser o del clasificador de grupos. |
+| `tests/regression.spec.js`           | Dos pruebas: (1) que Playwright detectaría un `fetch` cross-origin inyectado vía `addInitScript`, y (2) que la lógica de clasificación de origins (origen page vs. opaco vs. cross-origin) replica exactamente la del verifier en producción. |
+
+#### Garantía enforced por la suite
+
+- **Cero requests cross-origin** durante el flujo completo del usuario.
+- El Privacy Verifier en pantalla reporta `data-external-count="0"`.
+- La lógica de clasificación de URLs no confunde origines opacos (`data:`, `about:blank`, `blob:`) con origines externos — un error allí marcaría URLs internas como "externas" y rompería la garantía en cualquier página que use URLs internas legítimas.
+- Las fases futuras que agreguen cualquier dependencia externa (CDN, analytics, fonts remotas, telemetría) deben fallar este gate antes de hacer merge.
+
+#### Cómo agregar tests
+
+1. Crear un archivo nuevo en `tests/<algo>.spec.js`. Playwright auto-descubre specs por nombre (`*.spec.js`).
+2. Si el test necesita el Worker de ExifTool, llamar a la helper `patchWorkerBundle(page)` documentada en `tests/full-flow.spec.js` (workaround para un bug de detección en el runtime de ZeroPerl vendoreado).
+3. Correr `npx playwright test --grep "<test name>"` para iterar.
+4. Si el test modifica `dist/` (por ejemplo, agrega un asset nuevo), actualizar `playwright.config.js` → `webServer.command` o el listado de assets verificados por `tests/privacy-guard.spec.js`.
+
+Los artefactos del test (screenshots, traces, video on failure) van a `test-results/` y `playwright-report/` (ambos en `.gitignore`).
 
 ### Estructura del proyecto
 
