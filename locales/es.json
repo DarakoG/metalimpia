@@ -7,6 +7,7 @@
   "landing.supportedFormats": "Formatos soportados: JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX",
   "landing.privacyVerifier.collapsed": "Esta página está haciendo {count} conexiones con servidores externos.",
   "landing.privacyVerifier.collapsed.zero": "Esta página está haciendo 0 conexiones con servidores externos.",
+  "analyzing.loading": "Inicializando ExifTool...",
   "analyzing.message": "Analizando metadatos...",
   "results.title": "Tu archivo: {filename}",
   "results.summary": "Se encontraron {count} metadatos.",
