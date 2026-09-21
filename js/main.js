@@ -1,51 +1,56 @@
 /*
  * MetaLimpia — entry point / orchestrator
  *
- * Phase 5: wires the existing onRemove callbacks from the
- * Phase 4 results view to the Worker's `write` op and adds
- * the `processing` and `done` view states to the state
- * machine.
+ * Phase 6: canonicalises the AppState union from Data Model §3.1
+ * (no more `phase` on `analyzing` / `downloadName` on `done` —
+ * those are render hints, not state). Adds browser-too-old
+ * detection on boot, centralises every transition through
+ * `setState`, and prepares the orchestrator for focus management
+ * (Phase 6.8) and edge-case coverage (Phase 6.10).
  *
  * Pipeline on a valid file drop:
  *
  *   1. Validate the file (Phase 2 unchanged).
  *   2. Read into pendingBuffer (Phase 2 unchanged).
  *   3. Generate a session-scoped fileId via crypto.randomUUID.
- *   4. { view: 'analyzing', phase: 'loading' }
+ *   4. setState({ view: 'analyzing', file }) with render hint
+ *      `analyzingPhase = 'loading'`
  *      → WASM download + Worker init.
- *   5. { view: 'analyzing', phase: 'reading' }
+ *   5. setState({ view: 'analyzing', file }) with render hint
+ *      `analyzingPhase = 'reading'`
  *      → ExifTool read op.
  *   6. Read raw ExifTool JSON → metadataParser.parseExiftoolOutput
- *      → { view: 'results', file, metadata, fileId }.
+ *      → setState({ view: 'results', file, metadata }).
  *   7. User clicks "Borrar todo" or "Borrar seleccionados":
- *      a. { view: 'processing', phase: 'processing', file, selection }
+ *      a. setState({ view: 'processing', file, selection })
  *         → Worker `write` op with the live tagsToRemove.
- *      b. On success → { view: 'done', file, cleanedBuffer,
- *                        downloadName, removedCount }.
+ *      b. On success → setState({ view: 'done', file,
+ *                                 cleanedBuffer, removedCount }).
  *         The download button triggers a same-origin Blob URL
  *         download (js/ui/downloader.js). The "Procesar otro
  *         archivo" button returns to landing.
- *      c. On failure → { view: 'error', errorKey } mapped from
- *         the Worker's error code.
+ *      c. On failure → setState({ view: 'error', errorKey })
+ *         mapped from the Worker's error code.
  *
- * View states exercised by this orchestrator:
+ * View states exercised by this orchestrator (Flow §2.1):
  *
  *   landing     — dropzone visible
- *   analyzing   — loading or reading message; dropzone hidden
- *   results     — Phase 4 metadata list with checkboxes,
- *                 collapse/expand, sensitive badges, and
- *                 action bar (Borrar todo / Borrar
- *                 seleccionados / Cambiar archivo).
- *   processing  — Phase 5 spinner card with "Limpiando
- *                 archivo..." while the Worker runs the write op.
- *   done        — Phase 5 confirmation card with the cleaned
- *                 count, a "Descargar" primary action, and a
- *                 "Procesar otro archivo" secondary action.
+ *   analyzing   — analyzingPhase 'loading' or 'reading' message;
+ *                 dropzone hidden. Render hint only.
+ *   results     — metadata list with checkboxes, collapse/expand,
+ *                 sensitive badges, and action bar (Borrar todo /
+ *                 Borrar seleccionados / Cambiar archivo).
+ *   processing  — spinner card with "Limpiando archivo..." while
+ *                 the Worker runs the write op.
+ *   done        — confirmation card with the cleaned count, a
+ *                 "Descargar" primary action, and a "Procesar otro
+ *                 archivo" secondary action.
  *   error       — dropzone hidden, error card with back button.
  *
- * The state shape is the discriminated union defined in
- * Data Model §3.1, extended with `downloadName` for `done`
- * (the spec's CleanedFile §5.1 model also carries downloadName).
+ * The AppState shape is the canonical discriminated union from
+ * Data Model §3.1. Render hints (analyzingPhase) and module-
+ * local storage (pendingBuffer, lastSelection, activeFileId) live
+ * OUTSIDE the state so the discriminated union stays clean.
  */
 
 import { init as initI18n, t } from './i18n.js';
@@ -59,9 +64,61 @@ import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
 import { loadExiftool, readMetadata, writeMetadata } from './exiftoolLoader.js';
 
-// AppState per Data Model §3.1 — Phase 5 subset. Phase 6 will
-// harden the transitions; the shape is already stable.
+/**
+ * Canonical AppState — Data Model §3.1 discriminated union.
+ *
+ *   { view: 'landing' }
+ *   | { view: 'analyzing'; file: File }
+ *   | { view: 'results'; file: File; metadata: FileMetadata }
+ *   | { view: 'processing'; file: File; selection: MetadataSelection }
+ *   | { view: 'done'; file: File; cleanedBuffer: ArrayBuffer; removedCount: number }
+ *   | { view: 'error'; errorKey: string; context?: Record<string, unknown> }
+ *
+ * @typedef {Object} AppStateLanding
+ * @property {'landing'} view
+ *
+ * @typedef {Object} AppStateAnalyzing
+ * @property {'analyzing'} view
+ * @property {File} file
+ *
+ * @typedef {Object} AppStateResults
+ * @property {'results'} view
+ * @property {File} file
+ * @property {import('./metadataParser.js').FileMetadata} metadata
+ *
+ * @typedef {Object} AppStateProcessing
+ * @property {'processing'} view
+ * @property {File} file
+ * @property {{ removeAll: boolean, tagsToRemove: string[] }} selection
+ *
+ * @typedef {Object} AppStateDone
+ * @property {'done'} view
+ * @property {File} file
+ * @property {ArrayBuffer} cleanedBuffer
+ * @property {number} removedCount
+ *
+ * @typedef {Object} AppStateError
+ * @property {'error'} view
+ * @property {string} errorKey
+ * @property {Record<string, unknown>=} context
+ *
+ * @typedef {AppStateLanding | AppStateAnalyzing | AppStateResults | AppStateProcessing | AppStateDone | AppStateError} AppState
+ */
+
+/** @type {AppState} */
 let state = { view: 'landing' };
+
+/**
+ * Render hint for the `analyzing` view. The canonical state has
+ * a single `analyzing` shape; the orchestrator swaps which
+ * spinner message ("Inicializando ExifTool..." vs "Analizando
+ * metadatos...") is shown by updating this hint and re-rendering,
+ * without adding a `phase` field to the discriminated union.
+ * Reset to `null` on every transition out of `analyzing`.
+ *
+ * @type {'loading' | 'reading' | null}
+ */
+let analyzingPhase = null;
 
 // Holds the ArrayBuffer of the file that the user dropped.
 // Phase 3 hands it to the ExifTool worker. Phase 5 also
@@ -87,11 +144,41 @@ let activeFileId = null;
 
 /**
  * Replace the current state, then re-render the view.
- * State is always replaced wholesale — there are no
- * incremental updates in Phase 3.
+ *
+ * Every transition in the app goes through here, so this is
+ * the single place where:
+ *   - the previous state's transient storage (pendingBuffer,
+ *     lastSelection, activeFileId) gets released on the way
+ *     back to landing;
+ *   - the render hint (analyzingPhase) gets reset on the way
+ *     out of `analyzing`;
+ *   - focus management (Phase 6.8) can hook in one place.
+ *
+ * @param {AppState} next
  */
 function setState(next) {
   state = next;
+
+  // Out-of-analyzing: clear the render hint so a future
+  // transition back to analyzing starts fresh.
+  if (next.view !== 'analyzing') {
+    analyzingPhase = null;
+  }
+
+  render();
+}
+
+/**
+ * Update the render hint for the current `analyzing` state
+ * without changing the discriminated union shape. Re-renders
+ * so the spinner message swaps ("Inicializando ExifTool..." →
+ * "Analizando metadatos...").
+ *
+ * @param {'loading' | 'reading'} phase
+ */
+function setAnalyzingPhase(phase) {
+  if (state.view !== 'analyzing') return;
+  analyzingPhase = phase;
   render();
 }
 
@@ -105,6 +192,10 @@ function setState(next) {
  * true and re-announce when it flips to false, so this keeps
  * partial-phase swaps ("Inicializando..." → "Analizando...")
  * from being announced as separate events.
+ *
+ * Phase 6.1 — the canonical state does NOT carry `phase` or
+ * `downloadName`. Both are computed here (render hint +
+ * buildCleanedFilename) instead of being stored on the state.
  */
 function render() {
   const app = document.getElementById('app');
@@ -146,7 +237,7 @@ function render() {
   }
 
   if (state.view === 'analyzing') {
-    renderAnalyzingView(viewContainer, { phase: state.phase });
+    renderAnalyzingView(viewContainer, { phase: analyzingPhase });
     return;
   }
 
@@ -154,7 +245,7 @@ function render() {
     // Reuses the analyzing card layout (same spinner / same
     // card) but with the Phase 5 'processing.message' i18n
     // key, picked by analyzingView's phase-based lookup.
-    renderAnalyzingView(viewContainer, { phase: 'processing', file: state.file });
+    renderAnalyzingView(viewContainer, { phase: 'processing' });
     return;
   }
 
@@ -170,15 +261,20 @@ function render() {
   }
 
   if (state.view === 'done') {
+    // downloadName is computed on render from file.name per
+    // Data Model §5.1 (CleanedFile.downloadName). The state
+    // does not carry it; storing it would duplicate a
+    // derivable value.
+    const downloadName = buildCleanedFilename(state.file.name);
     renderDoneView(viewContainer, state.file, {
       cleanedBuffer: state.cleanedBuffer,
       removedCount: state.removedCount,
-      downloadName: state.downloadName,
+      downloadName,
     }, {
       onDownload: () => {
         triggerDownload(
           state.cleanedBuffer,
-          state.downloadName,
+          downloadName,
           state.file && state.file.type ? state.file.type : undefined
         );
       },
@@ -187,11 +283,6 @@ function render() {
     return;
   }
 }
-
-/**
- * Build the i18n interpolation context for an error view
- * based on the validator error code and the offending file.
- */
 
 /**
  * Generate a session-scoped id for a dropped file. Uses
@@ -264,16 +355,11 @@ function mapLoaderErrorToI18nKey(code) {
  *      removeAll pair. The Worker runs exiftool with
  *      `-unsafe -All= -o <tmp> <in>` (removeAll) or
  *      `-Tag= -o <tmp> <in>` (selective) per Phase 5.1.
- *   4. On success → 'done' view with the cleaned buffer,
- *      the download name, and the user-visible "removed"
- *      count (number of tags the user asked to remove).
+ *   4. On success → 'done' view with the cleaned buffer
+ *      and the user-visible "removed" count (number of
+ *      tags the user asked to remove).
  *   5. On failure → 'error' view mapped through
  *      mapLoaderErrorToI18nKey.
- *
- * The 'processing' state is not a placeholder — we do not
- * pre-allocate the cleanedBuffer on failure; the user can
- * retry from the error view's back button (which lands
- * them on results via Phase 6's error → results wiring).
  *
  * @param {{removeAll: boolean, fileId?: string, tagsToRemove?: string[] | null}} payload
  */
@@ -296,7 +382,11 @@ async function handleRemove(payload) {
     return;
   }
 
-  setState({ view: 'processing', phase: 'processing', file });
+  setState({
+    view: 'processing',
+    file,
+    selection: { removeAll, tagsToRemove },
+  });
 
   try {
     const cleanedBuffer = await writeMetadata(pendingBuffer, file.name, {
@@ -304,7 +394,6 @@ async function handleRemove(payload) {
       tagsToRemove,
     });
 
-    const downloadName = buildCleanedFilename(file.name);
     // "Se eliminaron N metadatos." — the count is what the
     // user ASKED to remove, not what ExifTool actually
     // erased (we do not re-read the file to count). For
@@ -320,7 +409,6 @@ async function handleRemove(payload) {
       view: 'done',
       file,
       cleanedBuffer,
-      downloadName,
       removedCount,
     });
   } catch (err) {
@@ -375,7 +463,8 @@ async function handleFile(file) {
   //      extracts the tags.
   //   4. Transition to results (Phase 4 will replace the
   //      placeholder renderer with a real grouped view).
-  setState({ view: 'analyzing', phase: 'loading', file });
+  setState({ view: 'analyzing', file });
+  setAnalyzingPhase('loading');
 
   try {
     await loadExiftool();
@@ -389,7 +478,7 @@ async function handleFile(file) {
     return;
   }
 
-  setState({ view: 'analyzing', phase: 'reading', file });
+  setAnalyzingPhase('reading');
 
   try {
     const rawMetadata = await readMetadata(pendingBuffer, file.name);
@@ -401,7 +490,7 @@ async function handleFile(file) {
     const metadata = parseExiftoolOutput(rawMetadata, activeFileId, {
       formatBinary: (size) => t('results.binaryValue', { size }),
     });
-    setState({ view: 'results', file, metadata, fileId: activeFileId });
+    setState({ view: 'results', file, metadata });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('MetaLimpia: readMetadata failed', err);
@@ -412,8 +501,51 @@ async function handleFile(file) {
   }
 }
 
+/**
+ * Phase 6.3 — feature-detect the browser's required APIs on
+ * boot. We refuse to render any other view until the page can
+ * at least run the analysis pipeline.
+ *
+ * Returns an AppState error shape if any required feature is
+ * missing, or null if the page can proceed.
+ *
+ * Per Flow §6.6 + Design Spec §5: if the browser is too old
+ * the user sees the upgrade-browser message and nothing else
+ * is reachable. There is no recovery path in the page; the
+ * user must upgrade.
+ *
+ * @returns {AppStateError | null}
+ */
+function checkBrowserSupport() {
+  if (typeof WebAssembly === 'undefined') {
+    return { view: 'error', errorKey: 'browser_too_old' };
+  }
+  if (typeof Worker === 'undefined') {
+    return { view: 'error', errorKey: 'browser_too_old' };
+  }
+  if (typeof ArrayBuffer === 'undefined') {
+    return { view: 'error', errorKey: 'browser_too_old' };
+  }
+  if (typeof Blob === 'undefined') {
+    return { view: 'error', errorKey: 'browser_too_old' };
+  }
+  if (typeof URL === 'undefined' || typeof URL.createObjectURL !== 'function') {
+    return { view: 'error', errorKey: 'browser_too_old' };
+  }
+  return null;
+}
+
 async function bootstrap() {
   await initI18n();
+
+  // Phase 6.3 — check browser support BEFORE wiring any UI.
+  // If we fail, render the error state and stop.
+  const unsupportedState = checkBrowserSupport();
+  if (unsupportedState) {
+    setState(unsupportedState);
+    return;
+  }
+
   wireVerifierToggle();
   wireUploader({
     dropzoneSelector: '#dropzone',
@@ -442,8 +574,14 @@ function wireVerifierToggle() {
 }
 
 bootstrap().catch((err) => {
-  // Phase 1 fallback. Phase 6 (edge cases) routes this
-  // through the full error view per Flow section 6.
+  // Phase 6 — route bootstrap failures through the same
+  // error view as runtime failures. We cannot reach this
+  // branch in a browser that already passed checkBrowserSupport
+  // (i18n.init is the only await before setState), but it
+  // catches pathological cases (e.g. the locale JSON failing
+  // to parse). The generic worker_crashed message is the
+  // right fallback here too.
   // eslint-disable-next-line no-console
   console.error('MetaLimpia: bootstrap failed', err);
+  setState({ view: 'error', errorKey: 'worker_crashed' });
 });
