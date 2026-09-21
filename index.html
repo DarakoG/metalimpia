@@ -17,6 +17,21 @@
   </head>
   <body>
     <!--
+      Phase 6.9 — skip link. Hidden off-screen until it
+      receives keyboard focus, then it becomes a visible
+      button-style anchor at the top-left so keyboard users
+      can jump straight to the main content. The href
+      targets the <main> below. The visually-hidden CSS
+      trick is the standard pattern — the link is fully
+      reachable via Tab even when not visible.
+    -->
+    <a
+      class="skip-link"
+      href="#main-content"
+      data-i18n-key="a11y.skipToContent"
+    >Saltar al contenido principal</a>
+
+    <!--
       Phase 1 — landing view only. Per Implementation Plan §4 / Design
       Spec §4, the page has four view states (landing, analyzing,
       results, done). Only the landing structure is rendered here;
@@ -25,8 +40,12 @@
       Default Spanish copy lives in the markup as a no-JS fallback.
       The i18n module rewrites any element with data-i18n-key at
       boot, falling back to the original text when a key is missing.
+
+      Phase 6.9 — the <main> id is renamed to `main-content`
+      (was `app`) so the skip link has a stable anchor target
+      that matches the semantic name of the landmark.
     -->
-    <main id="app" data-view="landing">
+    <main id="main-content" data-view="landing">
       <header class="site-header" role="banner">
         <div class="container">
           <a class="site-brand" href="/" aria-label="MetaLimpia — inicio">

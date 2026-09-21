@@ -1,6 +1,7 @@
 {
   "app.name": "MetaLimpia",
   "app.tagline": "Tu archivo nunca sale del navegador.",
+  "a11y.skipToContent": "Saltar al contenido principal",
   "landing.heading": "Revisá y eliminá los metadatos de tus archivos",
   "landing.subheading": "Arrastrá tu archivo o hacé click para seleccionarlo.",
   "landing.dropzone": "Arrastrá tu archivo acá o hacé click",

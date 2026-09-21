@@ -210,6 +210,35 @@ a {
   border-radius: var(--radius-sm);
 }
 
+/* Phase 6.9 — skip link. Hidden off-screen by default so it
+   does not steal visual space; pops into the top-left corner
+   the moment it receives keyboard focus so keyboard users
+   can jump past the header straight to the main content.
+   The off-screen positioning uses left/top rather than the
+   visually-hidden helper because we DO want the link to be
+   visible when focused. */
+.skip-link {
+  position: absolute;
+  left: -9999px;
+  top: 0;
+  z-index: 1000;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--color-primary);
+  color: var(--color-text-inverse);
+  border-radius: 0 0 var(--radius-md) 0;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  /* Off-screen via left: -9999px; on focus, snap to top-left. */
+}
+
+.skip-link:focus,
+.skip-link:focus-visible {
+  left: 0;
+  outline: 2px solid var(--color-text-inverse);
+  outline-offset: -4px;
+}
+
 /* =========================================================================
    Layout container
    ========================================================================= */

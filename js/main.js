@@ -220,12 +220,12 @@ function setAnalyzingPhase(phase) {
  * buildCleanedFilename) instead of being stored on the state.
  */
 function render() {
-  const app = document.getElementById('app');
+  const main = document.getElementById('main-content');
   const dropzoneSection = document.querySelector('.dropzone-section');
   const viewContainer = document.getElementById('view-container');
-  if (!app || !dropzoneSection || !viewContainer) return;
+  if (!main || !dropzoneSection || !viewContainer) return;
 
-  app.dataset.view = state.view;
+  main.dataset.view = state.view;
 
   const isAsyncView =
     state.view === 'analyzing' || state.view === 'processing';
