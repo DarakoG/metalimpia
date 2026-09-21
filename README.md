@@ -37,8 +37,18 @@ La página incluye un widget que te muestra en tiempo real que **cero conexiones
 - Sin cuentas, sin login, sin cookies de rastreo.
 - Sin Google Fonts, sin CDNs externos, sin analytics.
 - Sin telemetría. Lo que pasa en tu navegador se queda en tu navegador.
-- HTTPS obligatorio.
-- Política de privacidad completa: [/privacidad](https://metalimpia.app/privacidad).
+- HTTPS obligatorio (GitHub Pages lo fuerza por defecto).
+- Política de privacidad completa: [/privacidad.html](https://metalimpia.app/privacidad.html).
+
+### Limitaciones honestas de la plataforma
+
+MetaLimpia se sirve desde GitHub Pages, que **no permite** configurar headers HTTP personalizados en el sitio estático. Esto tiene dos consecuencias para el modelo de privacidad:
+
+- **Content Security Policy**: se aplica vía `<meta http-equiv="Content-Security-Policy">` en `index.html`. La forma `<meta>` es **idéntica en alcance a la forma header** para todas las directivas excepto `frame-ancestors` y `report-uri` / `report-to`, que los navegadores ignoran cuando vienen del `<meta>`. La política sigue siendo suficiente para prevenir XSS (no hay `unsafe-inline`, no hay `unsafe-eval`).
+- **Frame-ancestors no se enforce**: un sitio malicioso *podría* iframar esta página. La app no tiene acciones que cambien estado, así que el peor caso es vandalismo visual. Aceptable para MVP.
+- **Sin service worker intencionalmente**: no instalamos un SW que inyecte headers CSP, porque eso contradice la promesa de "cero estado del lado servidor" y agrega superficie de ataque.
+
+Las opciones para llegar a header-CSP completo serían migrar a Netlify, Vercel o Cloudflare Pages (que soportan `_headers` o equivalentes). Esa migración queda fuera del MVP.
 
 ## Desarrollo
 

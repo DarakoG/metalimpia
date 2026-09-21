@@ -7,11 +7,118 @@
     <meta name="theme-color" content="#1E3A5F" />
     <meta name="referrer" content="no-referrer" />
     <title>MetaLimpia</title>
-    <!-- Strict CSP: same-origin only, no inline scripts, no eval.
-         Defense in depth alongside the HTTP header set by GitHub Pages. -->
+    <!--
+      Phase 7.1 — strict Content Security Policy.
+
+      The CSP below is the PRIMARY privacy defence: it tells the
+      browser to refuse to load any script, style, image, font,
+      fetch, or worker from a non-origin source, and to refuse
+      inline scripts / eval entirely. Every directive is also
+      documented inline so future contributors do not weaken the
+      policy without understanding why each entry exists.
+
+      META-TAG CAVEATS (Phase 7.2 — documented limitation):
+
+        The CSP is delivered via a <meta> tag rather than an HTTP
+        response header because GitHub Pages does not let us set
+        custom headers on the static site (no _headers file, no
+        Vercel/Netlify config, no service worker). The meta-tag
+        form of CSP is identical in scope to the HTTP-header form
+        for everything below EXCEPT:
+
+          - frame-ancestors: the meta-tag form is IGNORED by
+            browsers (the spec forbids it). We keep the directive
+            here for documentation, but it has no runtime effect.
+            The recommended workaround is the X-Frame-Options
+            header, which GitHub Pages also does not let us set.
+            Result: a hostile site CAN iframe us. Mitigation: the
+            app has no state-changing actions; the worst case is
+            visual defacement. Acceptable for MVP.
+
+          - report-uri / report-to: also ignored in meta form.
+            We omit both directives because there is no
+            configured endpoint and silently swallowed reports
+            would be noise.
+
+        Both gaps are documented honestly in the README's
+        privacy section. The meta-tag CSP is sufficient for our
+        threat model (XSS prevention via script-src 'self' and
+        no 'unsafe-inline' / no 'unsafe-eval'), which is what
+        Phase 7 cares about.
+
+      Per-directive rationale:
+
+        default-src 'self'
+          Fallback for every fetch directive that does not have
+          its own policy. Same-origin only.
+
+        script-src 'self'
+          Same-origin scripts only. No 'unsafe-inline' (no
+          inline <script> blocks; the verifier expand toggle
+          etc. all use addEventListener) and no 'unsafe-eval'
+          (the audit in task 7.6 confirms zero uses of eval /
+          Function() / document.write in the codebase).
+
+        style-src 'self'
+          Same-origin stylesheets only. No 'unsafe-inline' on
+          purpose: every <style> attribute is a static class
+          hook defined in css/styles.css. If we ever need
+          per-element styles for the metadata table we will
+          add them to the CSS file, not inline.
+
+        img-src 'self' data:
+          Same-origin images plus the data: scheme. data: is
+          allowed for INLINE SVG icons only (the favicon mark
+          on the brand link, the dropzone arrow). We do not
+          load any bitmap images from origin.
+
+        connect-src 'self'
+          Same-origin for fetch / XHR / WebSocket / EventSource.
+          The audit in task 7.7 confirms there is exactly ONE
+          fetch() call in the codebase (the Worker fetching
+          assets/exiftool.wasm, which is same-origin).
+
+        worker-src 'self' blob:
+          Same-origin scripts PLUS blob: for Web Workers. The
+          blob: allowance is required because Vite compiles
+          Worker modules to blob URLs at build time; without
+          it the Worker's import.meta.url-based bootstrap
+          would be refused.
+
+        font-src 'self'
+          Same-origin fonts only. We do not load external
+          fonts; the design uses the system font stack.
+
+        object-src 'none'
+          Deny <object>, <embed>, <applet>. Defense in depth —
+          no plugins.
+
+        base-uri 'self'
+          Restrict what <base> tags can change. Defense against
+          base-tag injection attacks that would redirect
+          relative URLs.
+
+        form-action 'none'
+          No <form> submissions ever. We have no forms in the
+          MVP (the uploader is drag-drop / file-picker).
+
+        frame-ancestors 'none'
+          Tell the browser no site may iframe us. The meta-tag
+          form is IGNORED by browsers — see caveats above. We
+          keep the directive for documentation; the HTTP-header
+          form (Phase 7.2) would actually enforce this on
+          GitHub Pages IF Pages let us set custom headers.
+
+        manifest-src 'none'
+          Phase 7.1 — added today. Deny manifest.json; we have
+          no PWA manifest in the MVP (no service worker, no
+          installability). Without this directive the browser
+          would default to default-src 'self', which is fine
+          but ambiguous — explicit 'none' documents the intent.
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none';"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; manifest-src 'none';"
     />
     <link rel="stylesheet" href="/css/styles.css" />
   </head>
