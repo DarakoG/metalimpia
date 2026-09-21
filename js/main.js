@@ -411,6 +411,23 @@ async function handleRemove(payload) {
     return;
   }
 
+  // Snapshot the metadata total count BEFORE transitioning to
+  // 'processing', because after `setState({ view: 'processing' })`
+  // the module-level `state` no longer carries `metadata`. The
+  // 'processing' AppState shape (Data Model §3.1) does not have
+  // a metadata field, so reading `state.metadata` post-transition
+  // throws a TypeError on the success path. Phase 9 surfaced this
+  // regression on WebKit (the Worker write path takes noticeably
+  // longer there than on Chromium/Firefox, so the success path
+  // is actually reached before a rejection); Chromium/Firefox
+  // masked the bug because the synthetic PNG fixture fails the
+  // round-trip quickly and the catch block fires before the
+  // offending line is evaluated.
+  const totalCount =
+    state.view === 'results' && state.metadata
+      ? state.metadata.totalCount
+      : 0;
+
   setState({
     view: 'processing',
     file,
@@ -426,13 +443,11 @@ async function handleRemove(payload) {
     // "Se eliminaron N metadatos." — the count is what the
     // user ASKED to remove, not what ExifTool actually
     // erased (we do not re-read the file to count). For
-    // removeAll that equals state.metadata.totalCount; for
+    // removeAll that equals the snapshot above; for
     // selective it equals tagsToRemove.length. Edge case:
     // an empty metadata file with removeAll → totalCount
     // is 0 and we still produce a download.
-    const removedCount = removeAll
-      ? state.metadata.totalCount
-      : tagsToRemove.length;
+    const removedCount = removeAll ? totalCount : tagsToRemove.length;
 
     setState({
       view: 'done',

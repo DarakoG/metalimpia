@@ -94,6 +94,17 @@ export function applyTranslations() {
 
 function lookup(obj, path) {
   if (obj == null) return undefined;
+
+  // Phase 9.12 — try the flat-key path first. The shipped
+  // locale file is a flat object with dotted keys (e.g.
+  // `"verifier.summary.zero"`), so most lookups resolve here
+  // without descending into nested objects. We keep the
+  // nested-key fallback for any future locale that switches
+  // to a hierarchical shape.
+  if (Object.prototype.hasOwnProperty.call(obj, path)) {
+    return obj[path];
+  }
+
   return path.split('.').reduce((acc, segment) => {
     if (acc == null) return undefined;
     return acc[segment];
