@@ -651,6 +651,7 @@ async function bootstrap() {
     return;
   }
 
+  wireBackNavigationGuard();
   wireVerifierToggle();
   wireUploader({
     dropzoneSelector: '#dropzone',
@@ -658,6 +659,39 @@ async function bootstrap() {
     onFile: handleFile,
   });
   render();
+}
+
+/**
+ * Phase 6.10 — best-effort guard for the browser's back button.
+ *
+ * MetaLimpia is a single-page app with no client-side router,
+ * so the browser back button normally takes the user to the
+ * previous URL in their history (or shows a "Leave site?"
+ * dialog if there is none). When popstate fires while we are
+ * in the middle of an async view (analyzing / processing /
+ * results), we treat it as "the user wants to bail out" and
+ * return to landing.
+ *
+ * If popstate does not fire (e.g. no history entries), the
+ * browser default applies: the user leaves the page, the
+ * browser terminates the Worker, all in-memory state is GC'd.
+ * Either way the system stays consistent.
+ */
+function wireBackNavigationGuard() {
+  window.addEventListener('popstate', () => {
+    if (
+      state.view === 'processing' ||
+      state.view === 'analyzing' ||
+      state.view === 'results'
+    ) {
+      if (state.view === 'processing') {
+        // Kill the in-flight Worker write so it does not
+        // resolve into a now-stale state.
+        terminateWorker();
+      }
+      setState({ view: 'landing' });
+    }
+  });
 }
 
 function wireVerifierToggle() {

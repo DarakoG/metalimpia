@@ -51,6 +51,36 @@ export function wireUploader({
 }
 
 /**
+ * Heuristic check for "this dropped entry is a directory, not
+ * a file". Per Flow §7 edge case 7.5 / Implementation Plan §9
+ * task 6.10: directories are silently ignored — no error UI.
+ *
+ * Detection: directory entries arrive as File objects with
+ *   - size === 0
+ *   - type === '' (no MIME type)
+ *   - name without a file extension
+ *
+ * This combination is also possible for "real" empty files
+ * without an extension (e.g. "README" with 0 bytes), but those
+ * will be rejected by validateFile with the existing
+ * 'empty' / 'unsupported_format' error path; treating the
+ * directory case as silent-ignore is the gentler behaviour
+ * because it keeps a stray folder drop from blowing up the
+ * UI when the user clearly did not intend to upload one.
+ *
+ * @param {File} file
+ * @returns {boolean}
+ */
+function isProbablyDirectory(file) {
+  if (!file) return false;
+  if (typeof file.size !== 'number' || file.size !== 0) return false;
+  if (file.type) return false;
+  // Has a file extension? Treat as a (possibly empty) file,
+  // not a directory.
+  return !/\.[^./\\]+$/.test(file.name || '');
+}
+
+/**
  * Get or create the hidden <input type="file"> and apply the
  * allowlist as the `accept` attribute. The `accept` attribute
  * is set programmatically every boot so the source of truth
@@ -131,13 +161,25 @@ function bindHandlers(dropzone, input, onFile) {
     if (files && files.length > 0) {
       // Per spec §5 task 2.2: only the first file of a batch
       // is processed. Subsequent files are silently ignored.
-      onFile(files[0]);
+      const first = files[0];
+      // Flow §7 edge case — a directory drop is silently
+      // ignored (no error UI) so a stray folder does not
+      // blow up the screen.
+      if (isProbablyDirectory(first)) return;
+      onFile(first);
     }
   });
 
   input.addEventListener('change', () => {
     if (input.files && input.files.length > 0) {
-      onFile(input.files[0]);
+      const first = input.files[0];
+      if (isProbablyDirectory(first)) {
+        // Reset the input even on ignored directories so a
+        // subsequent legitimate pick fires the change event.
+        input.value = '';
+        return;
+      }
+      onFile(first);
       // Reset the input so selecting the same file twice
       // still fires the change event. Without this, the
       // browser caches the value and skips the handler.
