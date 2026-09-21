@@ -1019,6 +1019,60 @@ a {
   color: var(--color-text-muted);
 }
 
+/* Phase 7.3 — one row per loaded resource. Name on the left
+   (mono, primary text), metadata on the right (mono, muted,
+   "type · size · loadTime"). On narrow viewports the row
+   wraps so the metadata drops below the filename instead of
+   truncating it. */
+.verifier-list-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.verifier-list-item-name {
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+  font-size: 13px;
+  /* Truncate very long names with an ellipsis on narrow
+     viewports; the metadata line below still shows the
+     type/size so the user has full information. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.verifier-list-item-meta {
+  font-family: var(--font-mono);
+  color: var(--color-text-muted);
+  font-size: 12px;
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+
+/* Phase 7.3 — alarm state. If the Performance API ever reports
+   a cross-origin resource (which would be a privacy regression),
+   the verifier summary flips to --color-danger, the dot indicator
+   in the title flips to red, and the section border picks up a
+   left accent in danger so the alert is unmistakable without
+   being loud. The text remains --color-text-primary for AA
+   contrast (5.90:1 on #B23A3A). */
+.verifier-summary--alarm {
+  color: var(--color-danger);
+  font-weight: 600;
+}
+
+.verifier-title-dot--alarm {
+  background-color: var(--color-danger);
+}
+
+.verifier.verifier--alarm {
+  border-left: 4px solid var(--color-danger);
+}
+
 /* =========================================================================
    Landing page — footer
    ========================================================================= */

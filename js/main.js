@@ -63,6 +63,7 @@ import { renderDoneView } from './ui/doneView.js';
 import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
 import { loadExiftool, readMetadata, writeMetadata, terminateWorker } from './exiftoolLoader.js';
+import { initVerifier } from './ui/privacyVerifier.js';
 
 /**
  * Canonical AppState — Data Model §3.1 discriminated union.
@@ -652,7 +653,7 @@ async function bootstrap() {
   }
 
   wireBackNavigationGuard();
-  wireVerifierToggle();
+  initLiveVerifier();
   wireUploader({
     dropzoneSelector: '#dropzone',
     inputId: 'file-input',
@@ -694,22 +695,37 @@ function wireBackNavigationGuard() {
   });
 }
 
-function wireVerifierToggle() {
-  // Phase 1 wiring — unchanged. Kept inline rather than
-  // extracted so the orchestrator stays the single source
-  // of truth for boot-time DOM hooks.
-  const toggle = document.getElementById('verifier-toggle');
-  const detail = document.getElementById('verifier-detail');
-  const labelEl = toggle && toggle.querySelector('.verifier-toggle-label');
-  if (!toggle || !detail || !labelEl) return;
-
-  toggle.addEventListener('click', () => {
-    const isExpanded = toggle.getAttribute('aria-expanded') === 'true';
-    const next = !isExpanded;
-    toggle.setAttribute('aria-expanded', String(next));
-    detail.hidden = !next;
-    labelEl.textContent = next ? t('verifier.collapse') : t('verifier.expand');
-  });
+/**
+ * Phase 7.3 / 7.4 — boot the live privacy verifier.
+ *
+ * The verifier widget is part of the persistent layout (it sits
+ * inside <main>, outside the view container, so it stays rendered
+ * across every state — landing, analyzing, processing, results,
+ * done, error). The widget wires its own toggle click handler and
+ * polls the Performance API every 1 s so newly loaded resources
+ * (most importantly the lazy ExifTool WASM after the user's
+ * first file drop) appear in the resource list within ~1 s of
+ * being requested.
+ *
+ * The previous Phase 1 wiring (`wireVerifierToggle`) has moved
+ * into js/ui/privacyVerifier.js — the verifier module now owns
+ * its DOM contract end to end so the orchestrator does not have
+ * to know about the widget's internal structure.
+ */
+function initLiveVerifier() {
+  const container = document.querySelector('.verifier');
+  if (!container) {
+    // Markup missing — fail soft (the rest of the app still
+    // works). The verifier module itself throws if the required
+    // children are absent, so we guard the lookup here.
+    return;
+  }
+  try {
+    initVerifier({ container });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('MetaLimpia: privacy verifier failed to initialise', err);
+  }
 }
 
 bootstrap().catch((err) => {
