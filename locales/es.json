@@ -30,6 +30,8 @@
   "done.another": "Procesar otro archivo",
   "errors.tooLarge": "Este archivo es muy grande ({size} MB). El máximo permitido es 200 MB.",
   "errors.unsupportedFormat": "No reconocemos este formato. Formatos soportados: {formats}.",
+  "errors.empty": "Este archivo está vacío. Probá con otro archivo.",
+  "errors.formatsList": "JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX",
   "errors.corrupted": "El archivo parece estar dañado. Probá con otra copia.",
   "errors.wasmLoadFailed": "No pudimos cargar el motor. Verificá tu conexión y recargá la página.",
   "errors.workerCrashed": "Ocurrió un error inesperado. Recargá la página y probá de nuevo.",

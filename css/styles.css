@@ -343,6 +343,101 @@ a {
 }
 
 /* =========================================================================
+   Phase 2 — buttons, view container, error / analyzing views
+   ========================================================================= */
+
+/* Generic button surface used by the error-view back action.
+   Follows the same colour and motion tokens as the dropzone
+   and verifier so the whole page feels like one system. */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-3) var(--space-6);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface);
+  color: var(--color-text-primary);
+  font-size: 16px;
+  font-weight: 500;
+  font-family: inherit;
+  line-height: 1.2;
+  cursor: pointer;
+  transition:
+    background-color var(--motion-fast) var(--motion-easing),
+    border-color var(--motion-fast) var(--motion-easing),
+    color var(--motion-fast) var(--motion-easing);
+}
+
+.btn:hover,
+.btn:focus-visible {
+  background-color: var(--color-surface-alt);
+  border-color: var(--color-primary);
+}
+
+.btn-primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-text-inverse);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  color: var(--color-text-inverse);
+}
+
+/* View container — same vertical rhythm as the dropzone
+   section so the page does not jump when the dropzone hides. */
+.view-container {
+  padding: var(--space-6) 0 var(--space-12);
+}
+
+.view-container[hidden] {
+  display: none;
+}
+
+/* Error message card. The left border in --color-danger is a
+   quiet signal that this is an error without using a loud
+   red background; the message text stays at text-primary for
+   AA contrast per Phase 1 WCAG table. */
+.error-message {
+  padding: var(--space-6);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-left: 4px solid var(--color-danger);
+  border-radius: var(--radius-lg);
+  color: var(--color-text-primary);
+}
+
+.error-message + .btn {
+  margin-top: var(--space-4);
+  display: inline-flex;
+}
+
+/* Analyzing stub. Phase 3 replaces this with live progress
+   fed by the ExifTool worker. The padding mirrors the
+   dropzone min-height so the page height stays roughly
+   stable across the landing → analyzing transition. */
+.analyzing-message {
+  text-align: center;
+  padding: var(--space-12) var(--space-4);
+  color: var(--color-text-secondary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+/* When a section is hidden via the HTML `hidden` attribute,
+   browsers hide it. Re-assert it here so a future rule does
+   not accidentally override the attribute semantics. */
+.dropzone-section[hidden],
+.view-container[hidden] {
+  display: none;
+}
+
+/* =========================================================================
    Landing page — privacy verifier placeholder
    ========================================================================= */
 
