@@ -438,3 +438,63 @@ a {
 .site-footer-tagline {
   font-size: 14px;
 }
+
+/* =========================================================================
+   Responsive — mobile-first; max-width 720px centered on tablet/desktop.
+   Breakpoints follow the Design Spec "Layout" guidance.
+   ========================================================================= */
+
+/* Small phones (<360px) — tighten padding slightly */
+@media (max-width: 359px) {
+  .container {
+    padding: 0 var(--space-3);
+  }
+  .hero {
+    padding: var(--space-8) 0 var(--space-4);
+  }
+  .text-display {
+    font-size: 30px;
+  }
+  .dropzone {
+    padding: var(--space-6) var(--space-3);
+  }
+}
+
+/* Phones (360–479px) */
+@media (min-width: 360px) and (max-width: 479px) {
+  .text-display {
+    font-size: 32px;
+  }
+}
+
+/* Tablets and up: lock layout to 720px centered */
+@media (min-width: 720px) {
+  .container {
+    padding: 0 var(--space-6);
+  }
+  .hero {
+    padding: var(--space-16) 0 var(--space-12);
+  }
+  .hero-subheading {
+    font-size: 18px;
+  }
+  .verifier-header {
+    flex-wrap: nowrap;
+  }
+}
+
+/* =========================================================================
+   Reduced motion — Design Spec section 7 mandates honouring
+   prefers-reduced-motion. Disables all transitions and animations.
+   ========================================================================= */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
