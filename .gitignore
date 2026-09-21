@@ -37,3 +37,11 @@ Thumbs.db
 test-results/
 playwright-report/
 playwright/.cache/
+
+# AI agent system (private to user's local setup; not part of the project)
+.agents/
+.atl/
+skills-lock.json
+
+# Internal ODD workflow tracking (assistant-only; not project documentation)
+odd/
