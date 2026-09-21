@@ -52,6 +52,28 @@
 
 import { parseMetadata, writeMetadata } from '../vendor/exiftool/index.js';
 
+// Workaround for a vendored-runtime detection bug. The minified
+// `isBrowser()` helper inside js/vendor/zeroperl compares
+//
+//   typeof window < 'u' && typeof document < 'u'
+//
+// as STRING LESS-THAN. In a real Web Worker, `typeof window` is
+// the literal string 'undefined' which is NOT lexically less
+// than 'u' (their first characters are equal), so the helper
+// returns false and the runtime picks the Node.js branch — which
+// does not exist in a browser Worker — throwing
+// `TypeError: n is not a function` at WASM init.
+//
+// Aliasing `window` and `document` to `self` in the Worker scope
+// makes `typeof window` evaluate to 'object' (same as the main
+// thread), flipping the helper back to the browser branch.
+// Playwright's full-flow test previously worked around the same
+// bug with a runtime patch (see `patchWorkerBundle` in tests/);
+// this global alias fixes it in production where Playwright
+// is not running.
+self.window = self;
+self.document = self;
+
 // Path to the ExifTool WASM, resolved relative to this Worker's
 // module URL. Same-origin fetch — satisfies strict CSP
 // (connect-src 'self'; worker-src 'self' blob:).

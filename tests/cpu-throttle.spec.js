@@ -56,30 +56,6 @@ const FIXTURE_PATH = path.join(
 );
 
 /**
- * Patch the Phase 3 Worker detection bug via Playwright
- * `page.route()` so the runtime takes the browser-fetch branch
- * inside the Worker module. See tests/full-flow.spec.js for
- * the full writeup.
- */
-async function patchWorkerBundle(page) {
-  await page.route('**/exiftool.worker-*.js', async (route) => {
-    const response = await route.fetch();
-    let body = await response.text();
-    const original =
-      'function ue(){return typeof window<`u`&&typeof document<`u`}';
-    const replacement = 'function ue(){return !0}';
-    if (body.includes(original)) {
-      body = body.replace(original, replacement);
-    }
-    await route.fulfill({
-      status: response.status(),
-      headers: response.headers(),
-      body,
-    });
-  });
-}
-
-/**
  * Run the full user flow (drop → results) and time it. The
  * throttling is applied to the page's CDP session BEFORE the
  * flow starts.
@@ -122,7 +98,8 @@ test.describe('CPU throttling — low-end mobile emulation', () => {
         `CPU throttling via CDP is Chromium-only; ${browserName} has no equivalent Playwright hook`
       );
     }
-    await patchWorkerBundle(page);
+    // No patchWorkerBundle needed since Phase 9.12 — the
+    // production Worker self-aliases window/document on init.
   });
 
   test('unthrottled baseline — full flow completes within 60 s', async ({
@@ -148,7 +125,6 @@ test.describe('CPU throttling — low-end mobile emulation', () => {
     const baselineContext = await browser.newContext();
     try {
       const baselinePage = await baselineContext.newPage();
-      await patchWorkerBundle(baselinePage);
       const baselineMs = await timeFullFlow(baselinePage, 1);
       // eslint-disable-next-line no-console
       console.log(

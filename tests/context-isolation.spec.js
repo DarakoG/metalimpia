@@ -32,9 +32,11 @@
  *     tab has its own Worker, its own pendingBuffer, its
  *     own AppState module-level variable).
  *
- *     The Worker patch workaround (`patchWorkerBundle`)
- *     runs per-tab because `page.route` is scoped to the
- *     page. We register it on every tab before navigation.
+ *     The Worker patch workaround was removed in Phase 9.12 —
+ *     the production Worker now aliases `self.window = self`
+ *     and `self.document = self` so the vendored ZeroPerl
+ *     `isBrowser()` detection works in real Workers without
+ *     runtime patching.
  */
 
 import { test, expect } from '@playwright/test';
@@ -49,30 +51,6 @@ const FIXTURE_PATH = path.join(
   'sample-with-author.png'
 );
 
-/**
- * Patch the Phase 3 Worker detection bug via Playwright
- * `page.route()` so the runtime takes the browser-fetch branch
- * inside the Worker module. See tests/full-flow.spec.js for
- * the full writeup.
- */
-async function patchWorkerBundle(page) {
-  await page.route('**/exiftool.worker-*.js', async (route) => {
-    const response = await route.fetch();
-    let body = await response.text();
-    const original =
-      'function ue(){return typeof window<`u`&&typeof document<`u`}';
-    const replacement = 'function ue(){return !0}';
-    if (body.includes(original)) {
-      body = body.replace(original, replacement);
-    }
-    await route.fulfill({
-      status: response.status(),
-      headers: response.headers(),
-      body,
-    });
-  });
-}
-
 test.describe('Context isolation — private mode + multi-tab independence', () => {
   test('9.9 private mode — fresh context starts with empty verifier', async ({
     browser,
@@ -85,11 +63,6 @@ test.describe('Context isolation — private mode + multi-tab independence', () 
     const context = await browser.newContext();
     try {
       const page = await context.newPage();
-      // CRITICAL: register the Worker patch route BEFORE goto,
-      // otherwise the page's initial Worker bundle load is not
-      // intercepted and the Phase 3 Worker detection bug fires
-      // (see tests/full-flow.spec.js for the full writeup).
-      await patchWorkerBundle(page);
       await page.goto('/');
 
       // The key property of a fresh context (== incognito) is
@@ -171,12 +144,8 @@ test.describe('Context isolation — private mode + multi-tab independence', () 
     const pages = [];
     for (let i = 0; i < tabCount; i++) {
       const page = await context.newPage();
-      // The Worker patch is per-page — each tab needs its own
-      // route registered so its in-Worker bundling gets fixed
-      // (even though we don't exercise the Worker in this
-      // test, registering keeps the route setup consistent
-      // with the other specs).
-      await patchWorkerBundle(page);
+      // No patch needed since Phase 9.12 — the production
+      // Worker self-aliases window/document on init.
       pages.push(page);
     }
 

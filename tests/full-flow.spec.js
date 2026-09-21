@@ -24,7 +24,7 @@
  *   invariant.
  *
  * KNOWN PRE-EXISTING VENDORED-CODE BUG (Phase 3, surfaced by
- * Phase 8 testing):
+ * Phase 8 testing, FIXED in Phase 9.12):
  *
  *   The vendored ZeroPerl runtime in `js/vendor/zeroperl/index.js`
  *   detects "browser context" with the check
@@ -39,12 +39,12 @@
  *   exist in a browser Worker, throwing `TypeError: n is not a
  *   function` at WASM init.
  *
- *   The bug is invisible on the main thread (where `window` is
- *   defined), which is why Phase 7's manual DevTools audit did
- *   not catch it. We patch the Worker bundle via Playwright
- *   `page.route()` so this spec runs end-to-end. The route
- *   intercepts only the Worker's own JS, so the privacy
- *   invariant still holds.
+ *   Fix: the production Worker now self-aliases `self.window =
+ *   self` and `self.document = self` on init, so the broken
+ *   `isBrowser()` check returns true in real Workers too. The
+ *   patchWorkerBundle Playwright workaround previously used by
+ *   this spec was removed in Phase 9.12 — this spec now runs
+ *   against the unpatched production bundle.
  *
  * Fixture: tests/fixtures/sample-with-author.png — a 1×1 RGB
  * PNG with an `Author=Linus Torvalds` tEXt chunk. ExifTool
@@ -64,41 +64,14 @@ const FIXTURE_PATH = path.join(
   'sample-with-author.png'
 );
 
-/**
- * Patch the Phase 3 Worker detection bug via Playwright
- * `page.route()` so the runtime takes the browser-fetch branch
- * inside the Worker module. See the spec header for the
- * full writeup.
- *
- * The route only mutates the Worker's own JS bundle. Every
- * network the page makes otherwise is untouched, so the
- * privacy invariant still holds.
- */
-async function patchWorkerBundle(page) {
-  await page.route('**/exiftool.worker-*.js', async (route) => {
-    const response = await route.fetch();
-    let body = await response.text();
-    const original =
-      'function ue(){return typeof window<`u`&&typeof document<`u`}';
-    const replacement = 'function ue(){return !0}';
-    if (body.includes(original)) {
-      body = body.replace(original, replacement);
-    }
-    await route.fulfill({
-      status: response.status(),
-      headers: response.headers(),
-      body,
-    });
-  });
-}
-
 test.describe('Full user flow — upload + metadata', () => {
   test('drop a PNG → results view shows Author under author group', async ({
     page,
   }) => {
-    // Pre-route the Worker bundle so the Phase 3 detection patch
-    // is active when the WASM is requested.
-    await patchWorkerBundle(page);
+    // No patchWorkerBundle needed since Phase 9.12 — the
+    // production Worker self-aliases window/document on init,
+    // so the vendored ZeroPerl `isBrowser()` check returns
+    // true in real Workers without any runtime patching.
 
     // ---- 1. Land on the page. -------------------------------------
     await page.goto('/');
@@ -156,9 +129,7 @@ test.describe('Full user flow — upload + metadata', () => {
   });
 
   test('"Cambiar archivo" returns to landing', async ({ page }) => {
-    // The secondary CTA on the results view should drop the
-    // in-memory buffer and re-render the dropzone.
-    await patchWorkerBundle(page);
+    // No patchWorkerBundle needed since Phase 9.12 (see header).
 
     await page.goto('/');
     await page.setInputFiles('#file-input', FIXTURE_PATH);
