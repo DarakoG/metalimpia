@@ -57,6 +57,24 @@ export function t(key, params = {}) {
 }
 
 /**
+ * Look up a translation by dot-separated path WITHOUT the
+ * string interpolation or string-coercion guard that `t()`
+ * applies. Returns whatever the locale stores at that path:
+ * a string, an array of strings, an object, or `undefined`.
+ *
+ * Used by views that render locale-provided arrays (e.g. the
+ * PDF cleanup scope disclosure list in js/ui/pdfScopeView.js).
+ * Callers MUST guard against non-string return values — the
+ * PDF-scope view checks `Array.isArray(value)` before iterating.
+ *
+ * @param {string} key
+ * @returns {unknown}
+ */
+export function tRaw(key) {
+  return lookup(currentLocale, key);
+}
+
+/**
  * Walk the DOM and replace the text of any element marked with
  * data-i18n-key. Also handles data-i18n-attr="<attr>:<key>" for
  * ARIA labels, and data-i18n-title on the root <html> for

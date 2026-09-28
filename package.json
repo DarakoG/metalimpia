@@ -15,5 +15,37 @@
   },
   "engines": {
     "node": ">=20"
-  }
+  },
+  "main": "playwright.config.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "dependencies": {
+    "detect-libc": "^2.1.2",
+    "fdir": "^6.5.0",
+    "lightningcss": "^1.33.0",
+    "lightningcss-win32-x64-msvc": "^1.33.0",
+    "nanoid": "^3.3.19",
+    "pdf-lib": "^1.17.1",
+    "picocolors": "^1.1.1",
+    "picomatch": "^4.0.7",
+    "playwright": "^1.63.0",
+    "playwright-core": "^1.63.0",
+    "postcss": "^8.5.28",
+    "rolldown": "^1.2.9",
+    "source-map-js": "^1.2.1",
+    "tinyglobby": "^0.2.17"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DarakoG/metalimpia.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/DarakoG/metalimpia/issues"
+  },
+  "homepage": "https://github.com/DarakoG/metalimpia#readme"
 }

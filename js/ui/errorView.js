@@ -12,9 +12,9 @@
  * The error codes accepted here are a superset of what the
  * Phase 2 validator returns. Phase 5 adds `writeFailed`
  * for ExifTool write failures; the remaining codes
- * (corrupted, wasm_load_failed, worker_crashed,
- * browser_too_old) cover the full AppState.error path
- * defined in Data Model section 3.1.
+ * (corrupted, pdf_encrypted, wasm_load_failed,
+ * worker_crashed, browser_too_old) cover the full
+ * AppState.error path defined in Data Model section 3.1.
  */
 
 import { t } from '../i18n.js';
@@ -37,6 +37,7 @@ const ERROR_I18N_KEYS = {
   unsupported: 'errors.unsupported',
   crashed: 'errors.crashed',
   write_failed: 'errors.writeFailed',
+  pdf_encrypted: 'errors.pdfEncrypted',
   wasm_load_failed: 'errors.wasmLoadFailed',
   worker_crashed: 'errors.workerCrashed',
   browser_too_old: 'errors.browserTooOld',
