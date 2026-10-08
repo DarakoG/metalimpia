@@ -29,7 +29,7 @@ La página incluye un widget que te muestra en tiempo real que **cero conexiones
 
 ## Cómo usar
 
-1. Abrí [metalimpia.app](https://metalimpia.app) (o tu instancia local).
+1. Abrí [MetaLimpia](https://darakog.github.io/metalimpia/) (o tu instancia local).
 2. Arrastrá tu archivo o hacé click para seleccionarlo.
 3. Revisá los metadatos encontrados.
 4. Elegí qué borrar (todo o selectivo).
@@ -41,7 +41,7 @@ La página incluye un widget que te muestra en tiempo real que **cero conexiones
 - Sin Google Fonts, sin CDNs externos, sin analytics.
 - Sin telemetría. Lo que pasa en tu navegador se queda en tu navegador.
 - HTTPS obligatorio (GitHub Pages lo fuerza por defecto).
-- Política de privacidad completa: [/privacidad.html](https://metalimpia.app/privacidad.html).
+- Política de privacidad completa: [/privacidad.html](https://darakog.github.io/metalimpia/privacidad.html).
 
 ### Limitaciones honestas de la plataforma
 
