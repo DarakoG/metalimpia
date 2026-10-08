@@ -127,7 +127,7 @@ test.describe('Privacy Guard — no cross-origin network requests', () => {
     // setInputFiles bypasses the native file dialog; the file is
     // uploaded straight into the hidden #file-input the uploader
     // listens on.
-    await page.setInputFiles('#file-input', FIXTURE_PATH);
+    await page.setInputFiles('#manual-file-input', FIXTURE_PATH);
 
     // ---- 3. Wait for the analyzing → results transition. ---------
     await expect(page.locator('.analyzing-card')).toBeVisible();

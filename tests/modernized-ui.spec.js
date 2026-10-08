@@ -17,7 +17,7 @@ for (const width of [375, 1440]) {
     expect((await page.locator('#verifier-toggle').boundingBox()).height).toBeGreaterThanOrEqual(44);
     await page.screenshot({ path: `tests/screenshots/modernized-landing-${width}.png`, fullPage: true });
 
-    await page.setInputFiles('#file-input', {
+    await page.setInputFiles('#manual-file-input', {
       name: `${'synthetic-long-name-'.repeat(8)}.png`,
       mimeType: 'image/png',
       buffer: await (await import('node:fs/promises')).readFile('tests/fixtures/sample-with-author.png'),
@@ -45,7 +45,7 @@ for (const width of [375, 1440]) {
 
     await page.locator('.results-actions .btn').last().click();
     await expect(page.locator('#dropzone')).toBeVisible();
-    await page.setInputFiles('#file-input', {
+    await page.setInputFiles('#manual-file-input', {
       name: 'synthetic.txt', mimeType: 'text/plain', buffer: Buffer.from('local fixture'),
     });
     await expect(page.locator('.error-card')).toBeVisible();

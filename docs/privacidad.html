@@ -17,110 +17,12 @@
       http-equiv="Content-Security-Policy"
       content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; font-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'; frame-ancestors 'none'; manifest-src 'none';"
     />
-    <link rel="stylesheet" href="/css/styles.css" />
-    <style>
-      /*
-       * Page-local styles. The main app stylesheet is loaded
-       * above for the design tokens; the rules below are the
-       * minimum needed to render this page comfortably.
-       *
-       * Phase 7.5 — the policy page is intentionally low-fi:
-       * no JavaScript, no images, no fonts beyond the system
-       * stack, no analytics, no tracking pixels. Reading the
-       * HTML source IS the privacy audit.
-       */
-
-      .policy-page {
-        max-width: 640px;
-        margin: 0 auto;
-        padding: var(--space-12) var(--space-4) var(--space-16);
-      }
-
-      .policy-back {
-        display: inline-block;
-        margin-bottom: var(--space-6);
-        color: var(--color-primary);
-        text-decoration: none;
-        font-size: 14px;
-        font-weight: 500;
-      }
-
-      .policy-back:hover,
-      .policy-back:focus-visible {
-        text-decoration: underline;
-      }
-
-      .policy-title {
-        margin-bottom: var(--space-3);
-      }
-
-      .policy-lede {
-        margin-bottom: var(--space-8);
-        color: var(--color-text-secondary);
-        font-size: 18px;
-        line-height: 1.55;
-      }
-
-      .policy-section {
-        margin-bottom: var(--space-8);
-      }
-
-      .policy-section h2 {
-        font-size: 22px;
-        font-weight: 600;
-        line-height: 1.25;
-        margin-bottom: var(--space-3);
-        color: var(--color-text-primary);
-      }
-
-      .policy-section p {
-        margin-bottom: var(--space-3);
-        color: var(--color-text-primary);
-      }
-
-      .policy-section ul {
-        margin-bottom: var(--space-3);
-        padding-left: var(--space-6);
-        list-style: disc;
-      }
-
-      .policy-section li {
-        margin-bottom: var(--space-1);
-        color: var(--color-text-primary);
-      }
-
-      .policy-section code,
-      .policy-mono {
-        font-family: var(--font-mono);
-        font-size: 0.95em;
-        color: var(--color-text-primary);
-      }
-
-      .policy-callout {
-        margin: var(--space-6) 0;
-        padding: var(--space-4) var(--space-6);
-        background-color: var(--color-surface);
-        border: 1px solid var(--color-border);
-        border-left: 4px solid var(--color-success);
-        border-radius: var(--radius-md);
-      }
-
-      .policy-callout p:last-child {
-        margin-bottom: 0;
-      }
-
-      .policy-footer {
-        margin-top: var(--space-12);
-        padding-top: var(--space-6);
-        border-top: 1px solid var(--color-border);
-        color: var(--color-text-secondary);
-        font-size: 14px;
-      }
-    </style>
+    <link rel="stylesheet" href="%BASE_URL%css/styles.css" />
+    <link rel="stylesheet" href="%BASE_URL%css/privacy.css" />
   </head>
   <body>
     <main class="policy-page" id="main-content">
-      <a class="policy-back" href="/">← Volver a MetaLimpia</a>
+      <a class="policy-back" href="%BASE_URL%">← Volver a MetaLimpia</a>
 
       <h1 class="policy-title text-display">Política de privacidad</h1>
       <p class="policy-lede">
@@ -160,15 +62,16 @@
       <section class="policy-section" aria-labelledby="como-funciona">
         <h2 id="como-funciona">Cómo funciona MetaLimpia</h2>
         <p>
-          Cuando arrastrás un archivo a la página, tu navegador lo lee en memoria
-          como un <code>ArrayBuffer</code>. Un Web Worker ejecuta el motor
+          Cuando arrastras o seleccionas uno o varios archivos, el navegador
+          conserva sus referencias originales y procesa un archivo por vez.
           ExifTool (compilado a WebAssembly y empaquetado dentro del sitio)
-          sobre esos bytes. El Worker devuelve los metadatos encontrados; vos
-          elegís cuáles borrar; el Worker escribe una copia limpia y la página
-          la descarga a tu máquina.
+          elimina los metadatos que el formato permite quitar; los PDF usan el
+          limpiador local específico. Cada copia limpia se descarga antes de
+          pasar al siguiente archivo. También puedes elegir la revisión manual
+          para inspeccionar metadatos y borrar solo algunos.
         </p>
         <p>
-          En ningún momento los bytes de tu archivo salen del proceso del
+          Los archivos originales no se modifican. En ningún momento sus bytes salen del
           navegador. La única comunicación con la red es la descarga inicial
           del HTML, CSS, JavaScript y (la primera vez que lo necesitás) del
           archivo WebAssembly — todo desde el mismo dominio.
@@ -256,7 +159,7 @@
       </section>
 
       <footer class="policy-footer">
-        <p>MetaLimpia · Licencia MIT · <a href="/">Volver al inicio</a></p>
+        <p>MetaLimpia · Licencia MIT · <a href="%BASE_URL%">Volver al inicio</a></p>
       </footer>
     </main>
   </body>

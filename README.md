@@ -19,7 +19,9 @@ MetaLimpia resuelve ambas: usa el motor de metadatos más completo del mundo (Ex
 ## Características
 
 - **Privacidad real**: cero subida de archivos. Tu archivo se abre, se procesa y se descarga limpio, todo en tu navegador.
-- **Cobertura amplia**: JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX — y más en el futuro.
+- **Limpieza automática en serie**: seleccioná uno o varios archivos; cada archivo compatible se limpia y su descarga se inicia antes de procesar el siguiente.
+- **Revisión selectiva disponible**: la ruta manual permite revisar los metadatos y elegir cuáles borrar.
+- **Cobertura amplia**: JPG, PNG, TIFF, HEIC, PDF, DOCX, XLSX, PPTX — según lo que cada formato y motor permita eliminar.
 - **Verificable**: código fuente público, sin servicios externos, sin analytics.
 - **Gratis y de código abierto** (MIT).
 
@@ -30,10 +32,13 @@ La página incluye un widget que te muestra en tiempo real que **cero conexiones
 ## Cómo usar
 
 1. Abrí [MetaLimpia](https://darakog.github.io/metalimpia/) (o tu instancia local).
-2. Arrastrá tu archivo o hacé click para seleccionarlo.
-3. Revisá los metadatos encontrados.
-4. Elegí qué borrar (todo o selectivo).
-5. Descargá el archivo limpio.
+2. Arrastrá o seleccioná uno o varios archivos para iniciar la limpieza automática, en orden.
+3. Consultá el estado de cada archivo; si uno falla, los siguientes continúan.
+4. Si necesitás elegir qué borrar, usá **Revisar metadatos y elegir qué borrar** antes de seleccionar el archivo.
+
+El navegador puede bloquear descargas múltiples; MetaLimpia informa que inició cada descarga, pero no puede confirmar que se haya guardado. Los originales no se modifican. El límite técnico es de 200 MiB por archivo; archivos grandes pueden tardar y consumir memoria del navegador, sin una garantía de rendimiento para dispositivos móviles.
+
+Antes de procesar un PDF, tené en cuenta que reescribirlo invalida firmas digitales. No se eliminan autores de anotaciones por página ni datos personales visibles en el contenido.
 
 ## Privacidad y seguridad
 

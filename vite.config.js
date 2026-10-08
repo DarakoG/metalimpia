@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
-import { copyFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+const BASE_URL = '/metalimpia/';
 
 // Vite configuration for MetaLimpia.
 // Notes:
@@ -9,16 +11,17 @@ import { resolve } from 'node:path';
 // - WASM support: Vite handles `.wasm?init` and `.wasm` imports natively from v3+.
 //   No extra config needed for ExifTool WASM (configured in Phase 3).
 //
-// Phase 7.5 — privacy policy copy plugin.
+// Privacy policy route and static asset delivery.
 // GitHub Pages only serves what Vite outputs to dist/. Vite's
 // default `public/` directory would auto-copy a file, but the
 // privacy policy source lives at `docs/privacidad.html` per the
 // Design Spec §3 file structure (so the policy sits next to the
 // other documentation). A small inline plugin copies the file
-// into the output bundle at the end of the build. No new npm
-// dependencies — we use Node's built-in `fs` and `path`.
+// into the output bundle at the end of the build. Development
+// serves the same source through a same-origin middleware route.
+// No new npm dependencies — only Node built-ins are used.
 export default defineConfig({
-  base: '/metalimpia/',
+  base: BASE_URL,
   build: {
     target: 'es2020',
     outDir: 'dist',
@@ -36,17 +39,36 @@ export default defineConfig({
   plugins: [
     {
       name: 'copy-privacy-policy',
-      // closeBundle runs once at the end of the production
-      // build, after Vite has written index.html and the
-      // hashed assets to dist/. We piggyback on it to add
-      // docs/privacidad.html → dist/privacidad.html so the
-      // deployed site serves the policy at the URL the
-      // landing footer links to (/privacidad.html).
+      configureServer(server) {
+        server.middlewares.use((req, res, next) => {
+          const requestPath = new URL(req.url, 'http://localhost').pathname;
+          if (requestPath !== `${BASE_URL}privacidad.html`) {
+            next();
+            return;
+          }
+          const source = resolve(process.cwd(), 'docs/privacidad.html');
+          const html = readFileSync(source, 'utf8').replaceAll('%BASE_URL%', BASE_URL);
+          res.statusCode = 200;
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end(html);
+        });
+      },
+      // closeBundle adds the policy and its external stylesheets
+      // to the production output without relying on hashed names.
       closeBundle() {
         const src = resolve(process.cwd(), 'docs/privacidad.html');
         const dest = resolve(process.cwd(), 'dist/privacidad.html');
         try {
-          copyFileSync(src, dest);
+          const html = readFileSync(src, 'utf8').replaceAll('%BASE_URL%', BASE_URL);
+          writeFileSync(dest, html);
+          const cssDir = resolve(process.cwd(), 'dist/css');
+          mkdirSync(cssDir, { recursive: true });
+          for (const name of ['styles.css', 'privacy.css']) {
+            writeFileSync(
+              resolve(cssDir, name),
+              readFileSync(resolve(process.cwd(), 'css', name))
+            );
+          }
         } catch (err) {
           // Build does not fail if the policy file is missing —
           // it is documentation, not application code. We do

@@ -322,3 +322,11 @@ build on any regression.
 If a finding changes (a new `fetch` call, a new CDN reference, a new
 service worker registration, etc.), update both this file and the
 Phase 7 section of `odd/tasks/metalimpia-mvp.md` in the same commit.
+
+## Privacy policy delivery
+
+The policy page uses external same-origin stylesheets, not inline CSS, so
+`style-src 'self'` applies without weakening the CSP. Vite serves the policy
+route and styles during development and copies the policy plus both CSS files
+into the production output. The generated links use the configured project
+base (`/metalimpia/`); the app footer and return links stay inside that base.

@@ -126,6 +126,7 @@ export function loadExiftool() {
     const onError = (event) => {
       worker.removeEventListener('message', onMessage);
       worker.removeEventListener('error', onError);
+      worker.terminate();
       // eslint-disable-next-line no-console
       console.error('MetaLimpia: worker error during init', event);
       const error = new Error(
@@ -199,6 +200,7 @@ function handleCrash(event) {
     entry.reject(error);
   }
   pending.clear();
+  terminateWorker();
 }
 
 /**
@@ -249,7 +251,7 @@ export function terminateWorker() {
  * @param {object} message — payload sent to the Worker. Must
  *   already include the `op` field; this helper adds `id`.
  */
-function sendRequest(message) {
+function sendRequest(message, transfer = []) {
   if (!cachedWorker) {
     return Promise.reject(
       Object.assign(new Error('Worker no inicializado'), {
@@ -261,7 +263,8 @@ function sendRequest(message) {
   return new Promise((resolve, reject) => {
     pending.set(id, { resolve, reject });
     try {
-      cachedWorker.postMessage({ ...message, id });
+      if (transfer.length) cachedWorker.postMessage({ ...message, id }, transfer);
+      else cachedWorker.postMessage({ ...message, id });
     } catch (err) {
       pending.delete(id);
       reject(err);
@@ -310,12 +313,13 @@ export async function readMetadata(buffer, fileName) {
  */
 export async function writeMetadata(buffer, fileName, options = {}) {
   await loadExiftool();
-  const response = await sendRequest({
+  const message = {
     op: 'write',
     buffer,
     fileName,
     tagsToRemove: options.tagsToRemove || [],
     removeAll: Boolean(options.removeAll),
-  });
+  };
+  const response = await sendRequest(message, options.transferInput ? [buffer] : []);
   return response.cleaned;
 }

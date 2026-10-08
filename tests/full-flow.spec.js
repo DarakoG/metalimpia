@@ -78,7 +78,7 @@ test.describe('Full user flow — upload + metadata', () => {
     await expect(page.locator('#dropzone')).toBeVisible();
 
     // ---- 2. Upload the fixture through the hidden file input. ----
-    await page.setInputFiles('#file-input', FIXTURE_PATH);
+    await page.setInputFiles('#manual-file-input', FIXTURE_PATH);
 
     // ---- 3. Analyzing card appears, then results. -----------------
     // The analyzing card carries .analyzing-card; the results
@@ -132,7 +132,7 @@ test.describe('Full user flow — upload + metadata', () => {
     // No patchWorkerBundle needed since Phase 9.12 (see header).
 
     await page.goto('/');
-    await page.setInputFiles('#file-input', FIXTURE_PATH);
+    await page.setInputFiles('#manual-file-input', FIXTURE_PATH);
 
     const resultsCard = page.locator('.results-card');
     await expect(resultsCard).toBeVisible({ timeout: 60_000 });

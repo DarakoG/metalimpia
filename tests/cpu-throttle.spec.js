@@ -74,7 +74,7 @@ async function timeFullFlow(page, throttleRate) {
 
   const start = Date.now();
   await page.goto('/');
-  await page.setInputFiles('#file-input', FIXTURE_PATH);
+  await page.setInputFiles('#manual-file-input', FIXTURE_PATH);
   // The full flow ends when the results card is visible — the
   // Worker has init'd, the WASM has parsed, and ExifTool has
   // returned the metadata. We do NOT include the write path

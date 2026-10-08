@@ -2,7 +2,7 @@
  * MetaLimpia — drag-drop and click-to-select uploader
  *
  * Wires the #dropzone element to a hidden <input type="file">
- * and exposes a single `onFile` callback for the orchestrator.
+ * and exposes automatic multi-file and manual single-file callbacks.
  *
  * Implementation Plan §5, tasks 2.2–2.5:
  *  - dragenter / dragover / dragleave / drop with preventDefault
@@ -12,8 +12,8 @@
  *    on the keyboard does the same — dropzone is role=button)
  *  - hidden <input type="file"> with accept attribute from
  *    the fileHandler allowlist
- *  - only the first file of a dropped batch is processed
- *    (subsequent files silently ignored per spec §5 task 2.2)
+ *  - automatic picks and drops preserve all selected file references
+ *  - a separate single-file picker preserves selective review
  *
  * CSP: no eval, no inline handlers, no fetch. The orchestrator
  * decides what to do with the file; this module never touches
@@ -31,22 +31,35 @@ import { ACCEPT_ATTR } from '../fileHandler.js';
  * @param {string} config.inputId — id attribute of the hidden
  *   file input (defaults to 'file-input'). If the element does
  *   not exist yet, one is created and appended to <body>.
- * @param {(file: File) => void} config.onFile — invoked once
- *   per accepted file. Only the first file of a multi-file
- *   drop is passed through.
+ * @param {(file: File) => void} config.onFile — invoked for
+ *   the explicit manual review route.
+ * @param {(files: File[]) => void} config.onFiles — invoked for
+ *   the automatic queue route.
  */
 export function wireUploader({
   dropzoneSelector = '#dropzone',
   inputId = 'file-input',
   onFile,
+  onFiles,
 } = {}) {
   const dropzone = document.querySelector(dropzoneSelector);
   if (!dropzone) return;
 
   const input = ensureFileInput(inputId);
+  const manualInput = ensureFileInput('manual-file-input');
+  const manualButton = document.getElementById('manual-review-button');
 
+  if (manualButton) manualButton.addEventListener('click', () => manualInput.click());
   if (typeof onFile === 'function') {
-    bindHandlers(dropzone, input, onFile);
+    manualInput.addEventListener('change', () => {
+      const file = manualInput.files && manualInput.files[0];
+      if (file && !isProbablyDirectory(file)) onFile(file);
+      manualInput.value = '';
+    });
+  }
+
+  if (typeof onFiles === 'function' || typeof onFile === 'function') {
+    bindHandlers(dropzone, input, onFiles || ((files) => onFile(files[0])));
   }
 }
 
@@ -99,7 +112,7 @@ function ensureFileInput(id) {
   return input;
 }
 
-function bindHandlers(dropzone, input, onFile) {
+function bindHandlers(dropzone, input, onFiles) {
   // dragCounter pattern: dragenter / dragleave fire for child
   // elements too, so a naïve toggle would flicker when the
   // pointer crosses the icon / text spans. Counting entries
@@ -159,27 +172,15 @@ function bindHandlers(dropzone, input, onFile) {
 
     const files = e.dataTransfer && e.dataTransfer.files;
     if (files && files.length > 0) {
-      // Per spec §5 task 2.2: only the first file of a batch
-      // is processed. Subsequent files are silently ignored.
-      const first = files[0];
-      // Flow §7 edge case — a directory drop is silently
-      // ignored (no error UI) so a stray folder does not
-      // blow up the screen.
-      if (isProbablyDirectory(first)) return;
-      onFile(first);
+      const selected = Array.from(files).filter((file) => !isProbablyDirectory(file));
+      if (selected.length) onFiles(selected);
     }
   });
 
   input.addEventListener('change', () => {
     if (input.files && input.files.length > 0) {
-      const first = input.files[0];
-      if (isProbablyDirectory(first)) {
-        // Reset the input even on ignored directories so a
-        // subsequent legitimate pick fires the change event.
-        input.value = '';
-        return;
-      }
-      onFile(first);
+      const selected = Array.from(input.files).filter((file) => !isProbablyDirectory(file));
+      if (selected.length) onFiles(selected);
       // Reset the input so selecting the same file twice
       // still fires the change event. Without this, the
       // browser caches the value and skips the handler.

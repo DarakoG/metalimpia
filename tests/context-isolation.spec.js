@@ -95,7 +95,7 @@ test.describe('Context isolation — private mode + multi-tab independence', () 
       // flow — Phase 9 timing data showed WebKit takes up to
       // ~60 s for the cold Worker init + read pass, so we
       // give this assertion the full 120 s budget.
-      await page.setInputFiles('#file-input', FIXTURE_PATH);
+       await page.setInputFiles('#manual-file-input', FIXTURE_PATH);
       await expect(page.locator('.results-card')).toBeVisible({
         timeout: 120_000,
       });

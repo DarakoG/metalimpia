@@ -65,6 +65,7 @@ import { buildCleanedFilename, triggerDownload } from './ui/downloader.js';
 import { parseExiftoolOutput } from './metadataParser.js';
 import { loadExiftool, readMetadata, writeMetadata, terminateWorker } from './exiftoolLoader.js';
 import { initVerifier } from './ui/privacyVerifier.js';
+import { createBatchQueue } from './batchQueue.js';
 
 /**
  * Canonical AppState — Data Model §3.1 discriminated union.
@@ -159,6 +160,15 @@ let lastSelection = null;
 // landing → analyzing → results transitions without
 // leaking to the network. Data Model §3.2 (UserFile.id).
 let activeFileId = null;
+
+let batchSnapshot = { busy: false, items: [] };
+const batchQueue = createBatchQueue({
+  processFile: processAutomaticFile,
+  onUpdate: (snapshot) => {
+    batchSnapshot = snapshot;
+    if (state.view === 'batch') render();
+  },
+});
 
 /**
  * Replace the current state, then re-render the view.
@@ -258,6 +268,11 @@ function render() {
   viewContainer.hidden = false;
   viewContainer.innerHTML = '';
 
+  if (state.view === 'batch') {
+    renderBatchView(viewContainer, batchSnapshot);
+    return;
+  }
+
   if (state.view === 'error') {
     renderErrorView(viewContainer, state.errorKey, state.context, {
       onBack: () => setState({ view: 'landing' }),
@@ -332,6 +347,152 @@ function render() {
     });
     return;
   }
+}
+
+function queueStatusText(item) {
+  const keys = {
+    queued: 'batch.status.queued',
+    processing: 'batch.status.processing',
+    downloaded: 'batch.status.downloaded',
+    failed: 'batch.status.failed',
+  };
+  return t(keys[item.status] || 'batch.status.failed');
+}
+
+function renderBatchView(container, snapshot) {
+  const section = document.createElement('section');
+  section.className = 'batch-card';
+  section.setAttribute('aria-labelledby', 'batch-title');
+
+  const heading = document.createElement('h2');
+  heading.id = 'batch-title';
+  heading.className = 'batch-title text-h2';
+  heading.textContent = t('batch.title');
+  section.appendChild(heading);
+
+  const completed = snapshot.items.filter((item) => item.status === 'downloaded' || item.status === 'failed').length;
+  const progress = document.createElement('p');
+  progress.className = 'batch-progress text-body';
+  progress.setAttribute('role', 'status');
+  progress.setAttribute('aria-live', 'polite');
+  progress.textContent = snapshot.busy
+    ? t('batch.progress', { completed, total: snapshot.items.length })
+    : t('batch.finished', { completed, total: snapshot.items.length });
+  section.appendChild(progress);
+
+  const notice = document.createElement('p');
+  notice.className = 'batch-download-notice text-small';
+  notice.textContent = t('batch.downloadNotice');
+  section.appendChild(notice);
+
+  const list = document.createElement('ol');
+  list.className = 'batch-items';
+  list.setAttribute('aria-label', t('batch.itemsLabel'));
+  snapshot.items.forEach((item, index) => {
+    const row = document.createElement('li');
+    row.className = `batch-item batch-item--${item.status}`;
+    const name = document.createElement('span');
+    name.className = 'batch-item-name';
+    name.textContent = item.name;
+    const status = document.createElement('span');
+    status.className = 'batch-item-status';
+    status.textContent = queueStatusText(item);
+    row.append(name, status);
+
+    if (item.status === 'failed' && item.error) {
+      const error = document.createElement('p');
+      error.className = 'batch-item-error';
+      error.textContent = queueErrorMessage(item);
+      row.appendChild(error);
+    }
+
+    if (!snapshot.busy && (item.status === 'failed' || item.status === 'downloaded')) {
+      const retry = document.createElement('button');
+      retry.type = 'button';
+      retry.className = 'btn btn-secondary batch-retry';
+      retry.textContent = t(item.status === 'failed' ? 'batch.retry' : 'batch.downloadAgain');
+      retry.addEventListener('click', () => batchQueue.retry(index));
+      row.appendChild(retry);
+    }
+    list.appendChild(row);
+  });
+  section.appendChild(list);
+
+  if (!snapshot.busy) {
+    const another = document.createElement('button');
+    another.type = 'button';
+    another.className = 'btn btn-primary batch-another';
+    another.textContent = t('batch.another');
+    another.addEventListener('click', () => {
+      batchQueue.reset();
+      setState({ view: 'landing' });
+    });
+    section.appendChild(another);
+  }
+  container.appendChild(section);
+}
+
+function queueErrorMessage(item) {
+  const code = item.error;
+  const keys = {
+    empty: 'errors.empty',
+    too_large: 'errors.tooLarge',
+    unsupported_format: 'errors.unsupportedFormat',
+    corrupted: 'errors.corrupted',
+    unsupported: 'errors.unsupported',
+    read_failed: 'errors.readFailed',
+    pdf_encrypted: 'errors.pdfEncrypted',
+    write_failed: 'errors.writeFailed',
+    crashed: 'errors.workerCrashed',
+    worker_crashed: 'errors.workerCrashed',
+    wasm_load_failed: 'errors.wasmLoadFailed',
+    processing_failed: 'errors.processingFailed',
+  };
+  const context = code === 'too_large'
+    ? { size: Math.round(item.file.size / (1024 * 1024)) }
+    : code === 'unsupported_format'
+      ? { formats: t('errors.formatsList') }
+      : {};
+  return t(keys[code] || 'errors.processingFailed', context);
+}
+
+async function processAutomaticFile(file, { isCurrent = () => true } = {}) {
+  const validation = validateFile(file);
+  if (!validation.ok) {
+    const error = new Error(validation.error);
+    error.code = validation.error;
+    throw error;
+  }
+
+  let cleanedBuffer;
+  try {
+    if (isPdfFileName(file.name)) {
+      const buffer = await readFile(file);
+      const scrubber = await import('./pdfScrubber.js');
+      cleanedBuffer = await scrubber.scrubPdf(buffer);
+    } else {
+      const buffer = await readFile(file);
+      cleanedBuffer = await writeMetadata(buffer, file.name, {
+        removeAll: true,
+        transferInput: true,
+      });
+    }
+    if (!isCurrent()) return { downloadStarted: false, cancelled: true };
+    triggerDownload(cleanedBuffer, buildCleanedFilename(file.name), file.type || undefined);
+    return { downloadStarted: true };
+  } catch (error) {
+    if (error && (error.code === 'crashed' || error.code === 'worker_crashed')) terminateWorker();
+    throw error;
+  } finally {
+    cleanedBuffer = null;
+  }
+}
+
+function handleFiles(files) {
+  if (!files || !files.length || batchQueue.snapshot().busy) return;
+  batchSnapshot = { busy: false, items: [] };
+  setState({ view: 'batch' });
+  batchQueue.start(files);
 }
 
 /**
@@ -819,6 +980,7 @@ async function bootstrap() {
     dropzoneSelector: '#dropzone',
     inputId: 'file-input',
     onFile: handleFile,
+    onFiles: handleFiles,
   });
   render();
 }
@@ -844,9 +1006,12 @@ function wireBackNavigationGuard() {
     if (
       state.view === 'processing' ||
       state.view === 'analyzing' ||
-      state.view === 'results'
+      state.view === 'results' ||
+      state.view === 'batch'
     ) {
-      if (state.view === 'processing') {
+      if (state.view === 'batch') {
+        batchQueue.reset();
+      } else if (state.view === 'processing') {
         // Kill the in-flight Worker write so it does not
         // resolve into a now-stale state.
         terminateWorker();

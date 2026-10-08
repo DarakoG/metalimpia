@@ -21,11 +21,8 @@
  *     creator origin). The strict CSP already allows
  *     `blob:` for workers; the click() does not trigger a
  *     network request, only the local download.
- *   - URL.revokeObjectURL is called immediately after the
- *     click(). The browser has already read the bytes to
- *     start the download; revoking the URL only frees the
- *     Blob reference, it does not abort the in-flight
- *     download.
+ *   - Object URLs are revoked shortly after the click so
+ *     browsers can begin consuming each download reliably.
  *   - The `<a>` element is created in memory and clicked
  *     programmatically. It is NOT appended to the DOM, so
  *     it never appears as an `<a href="blob:...">` element
@@ -33,6 +30,8 @@
  *
  * CSP / a11y:
  *   - No innerHTML, no eval, no inline handlers.
+ *   - The function reports initiation only; browser policy
+ *     may still block saving multiple files.
  *   - The function is fire-and-forget — the caller's UI
  *     updates (e.g. moving to the `done` state) happen on
  *     the click, which is synchronous.
@@ -124,7 +123,12 @@ export function triggerDownload(cleanedBuffer, downloadName, mimeType) {
   a.download = downloadName;
   // NOT appended to the DOM. Programmatic click() on a detached
   // <a download> still triggers the browser's download path.
-  a.click();
-
-  URL.revokeObjectURL(url);
+  try {
+    a.click();
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return true;
 }
